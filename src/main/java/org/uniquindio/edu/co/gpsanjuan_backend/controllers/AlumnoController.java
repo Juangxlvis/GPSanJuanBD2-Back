@@ -22,7 +22,7 @@ public class AlumnoController {
 
     // FUNCIONA
     @PostMapping("/obtener-nota")
-    public ResponseEntity<MensajeDTO<Float>> obtenerNota(@RequestBody Long id_presentacion_examen) {
+    public ResponseEntity<MensajeDTO<Float>> obtenerNota(@RequestBody Integer id_presentacion_examen) {
         return ResponseEntity.ok().body(new MensajeDTO<>(false, "", alumnoService.obtenerNotaPresentacionExamen(id_presentacion_examen)));
     }
 
