@@ -12,20 +12,21 @@ import lombok.Setter;
 @AllArgsConstructor
 @NoArgsConstructor
 public class Examen {
+
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "examen_seq_gen")
     @SequenceGenerator(name = "examen_seq_gen", sequenceName = "examen_seq", allocationSize = 1)
-    private Integer id_examen;
-    private  Integer tiempo_maximo;
+    private Long id_examen;
+    private  Integer tiempo_max;
     private Integer numero_preguntas;
-    private Float porcentaje_curso;
+    private Integer porcentajeCurso;
     private String nombre;
-    private String descripcion;
     private Integer porcentaje_aprobatorio;
     private String fecha_hora_inicio;
-    private String fecha_hora_limite;
-    private Integer numero_preguntas_aleatorias;
-    private Integer tema_id;
-    private Integer docente_id;
-    private Integer grupo_id;
+    private String fecha_hora_fin;
+    private Integer num_preguntas_aleatorias;
+    private Integer id_tema;
+    private Integer id_docente;
+    private Integer id_grupo;
+
 }

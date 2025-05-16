@@ -7,10 +7,10 @@ public record PreguntaExamenDTO(
 
         Integer tiempoPregunta,
 
-        boolean tieneTiempoMaximo,
+        Character tieneTiempoMaximo,
 
-        PreguntaDTO pregunta,
+        Integer id_pregunta,
 
-        ExamenDTO examen
+        Integer id_examen
 ) {
 }

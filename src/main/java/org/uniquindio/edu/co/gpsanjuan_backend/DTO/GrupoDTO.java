@@ -4,19 +4,14 @@ import java.util.List;
 
 public record GrupoDTO(
         Integer grupoId,
-        List<BloqueHorarioDTO> horarios,
         String jornada,
         String nombre,
         String periodo,
-
         List<NotaDTO> notas,
-
-        CursoDTO curso,
-
+        Integer id_curso,
+        List<BloqueHorarioDTO> horarios,
         List<AlumnoDTO> alumnos,
-
-        DocenteDTO docente
-
+        Integer id_docente
 ) {
 
 }

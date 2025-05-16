@@ -6,7 +6,7 @@ public record CrearExamenDTO(
         Integer porcentaje_curso,
         String nombre,
         String descripcion,
-        Integer porcentaje_aprobatorio,
+        Float porcentaje_aprobatorio,
         String fecha_hora_inicio,
         String fecha_hora_limite,
         Integer numero_preguntas_aleatorias,

@@ -3,13 +3,13 @@ package org.uniquindio.edu.co.gpsanjuan_backend.DTO;
 import java.util.List;
 
 public record TemaDTO (
-        Long temaId,
+        Integer temaId,
         String titulo,
 
         String descripcion,
 
         List<ExamenDTO> examenes,
 
-        List<PreguntaDTO> unidades
+        Integer unidad_id_unidad
 ){
 }

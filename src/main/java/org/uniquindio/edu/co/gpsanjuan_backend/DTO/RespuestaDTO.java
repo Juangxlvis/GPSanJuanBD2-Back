@@ -6,9 +6,9 @@ public record RespuestaDTO (
 
         Integer respuestaId,
         String descripcion,
-        boolean esVerdadera,
+        Character esVerdadera,
 
-        PreguntaDTO pregunta,
+        Integer id_pregunta,
 
         List<PresentacionPreguntaDTO> presentacionesPregunta
 

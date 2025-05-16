@@ -17,7 +17,6 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.simple.SimpleJdbcCall;
 import org.springframework.stereotype.Service;
 import org.uniquindio.edu.co.gpsanjuan_backend.DTO.*;
-import org.uniquindio.edu.co.gpsanjuan_backend.domain.Examen;
 import org.uniquindio.edu.co.gpsanjuan_backend.repositories.ExamenRepository;
 import org.uniquindio.edu.co.gpsanjuan_backend.services.interfaces.DocenteService;
 

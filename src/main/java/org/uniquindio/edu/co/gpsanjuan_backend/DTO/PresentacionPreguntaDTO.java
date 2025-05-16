@@ -4,13 +4,12 @@ public record PresentacionPreguntaDTO (
 
         Integer presentacionPreguntaId,
 
-        boolean respuestaCorrecta,
+        Character respuestaCorrecta,
 
+        Integer idPresentacionExamen,
 
-        PresentacionExamenDTO presentacionExamen,
+        Integer id_pregunta,
 
-        PreguntaDTO pregunta,
-
-        RespuestaDTO respuesta
+        Integer id_respuesta
 ){
 }
