@@ -19,15 +19,16 @@ public class AutenticationServiceImp implements AutenticationService {
     public Character login(LoginDTO user) {
         StoredProcedureQuery storedProcedure = entityManager.createStoredProcedureQuery("login");
 
-        storedProcedure.registerStoredProcedureParameter("id", String.class, ParameterMode.IN);
+        storedProcedure.registerStoredProcedureParameter("p_id", String.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("rol", String.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("res", Character.class, ParameterMode.OUT);
 
-        storedProcedure.setParameter("id", user.id());
+        storedProcedure.setParameter("p_id", user.id());
         storedProcedure.setParameter("rol", user.rol());
 
         storedProcedure.execute();
 
-        return (Character) storedProcedure.getOutputParameterValue("res");
+        String r = (String) storedProcedure.getOutputParameterValue("res");
+        return (r != null && !r.isEmpty()) ? r.charAt(0) : '0';
     }
 }
