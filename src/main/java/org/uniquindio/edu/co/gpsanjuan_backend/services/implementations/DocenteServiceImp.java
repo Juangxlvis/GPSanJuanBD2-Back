@@ -93,6 +93,7 @@ public class DocenteServiceImp implements DocenteService {
         storedProcedure.registerStoredProcedureParameter("v_numero_preguntas", Integer.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_porcentaje_curso", Integer.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_nombre", String.class, ParameterMode.IN);
+        storedProcedure.registerStoredProcedureParameter("v_descripcion", String.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_porcentaje_aprobatorio", Integer.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_fecha_hora_inicio", String.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_fecha_hora_fin", String.class, ParameterMode.IN);
@@ -107,6 +108,7 @@ public class DocenteServiceImp implements DocenteService {
         storedProcedure.setParameter("v_numero_preguntas", examenDTO.numero_preguntas());
         storedProcedure.setParameter("v_porcentaje_curso", examenDTO.porcentaje_curso());
         storedProcedure.setParameter("v_nombre", examenDTO.nombre());
+        storedProcedure.setParameter("v_descripcion", examenDTO.descripcion());
         storedProcedure.setParameter("v_porcentaje_aprobatorio", examenDTO.porcentaje_aprobatorio());
 
         storedProcedure.setParameter("v_fecha_hora_inicio", examenDTO.fecha_hora_inicio());
