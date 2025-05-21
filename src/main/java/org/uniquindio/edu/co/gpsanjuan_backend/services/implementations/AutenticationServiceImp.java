@@ -28,7 +28,7 @@ public class AutenticationServiceImp implements AutenticationService {
 
         storedProcedure.execute();
 
-        String r = (String) storedProcedure.getOutputParameterValue("res");
-        return (r != null && !r.isEmpty()) ? r.charAt(0) : '0';
+        Character r =  (Character) storedProcedure.getOutputParameterValue("res");
+        return (r != null) ? r : '0';
     }
 }

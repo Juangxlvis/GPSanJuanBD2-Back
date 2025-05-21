@@ -239,7 +239,7 @@ public class DocenteServiceImp implements DocenteService {
 
         // Establecer los valores de los parámetros de entrada
         storedProcedure.setParameter("p_id_usuario", id);
-        storedProcedure.setParameter("rol", "alumno");
+        storedProcedure.setParameter("rol", "docente");
 
         // Ejecutar el procedimiento almacenado
         storedProcedure.execute();
@@ -262,7 +262,7 @@ public class DocenteServiceImp implements DocenteService {
 
         // Establecer los valores de los parámetros de entrada
         storedProcedure.setParameter("p_id_usuario", id);
-        storedProcedure.setParameter("rol", "alumno");
+        storedProcedure.setParameter("rol", "docente");
 
         // Ejecutar el procedimiento almacenado
         storedProcedure.execute();
