@@ -174,6 +174,7 @@ public class AlumnoServiceImp implements AlumnoService {
         storedProcedure.execute();
 
         String json1 = (String) storedProcedure.getOutputParameterValue("res");
+        System.out.println("JSON from DB for get_examenes_pendientes (ID " + id + ", ID Grupo " + idGrupo + "): |" + json1 + "|");
         Gson gson = new Gson();
         Type personListType = new TypeToken<List<ExamenPendienteDTO>>() {}.getType();
         return gson.fromJson(json1, personListType);    }

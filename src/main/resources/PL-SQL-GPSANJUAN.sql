@@ -54,45 +54,70 @@ end;
 
 -- (HECHO) Procedimiento que retorna los grupos de un usuario dado su id y rol.
 -- Retorna un JSON con los grupos del usuario, especficando el id del grupo, el nombre del grupo y el nombre del curso.
-create or replace procedure get_grupos_por_usuario(p_id_usuario in varchar2, rol in varchar2, res out clob) as
+CREATE OR REPLACE PROCEDURE get_grupos_por_usuario(
+    p_id_usuario IN VARCHAR2,
+    rol_in IN VARCHAR2,
+    res OUT CLOB
+) AS
+    v_json_result CLOB;
 BEGIN
-
-    if rol = 'docente' then
-        -- Retornar los grupos de un docente.
-        SELECT JSON_ARRAYAGG(
-                       JSON_OBJECT(
-                               'id_grupo' VALUE id_grupo,
-                               'nombre_grupo' VALUE nombre_grupo,
-                               'nombre_curso' VALUE nombre_curso
-                               FORMAT JSON
-                       )
+    IF LOWER(rol_in) = 'docente' THEN
+        SELECT COALESCE(
+                       JSON_ARRAYAGG(
+                               JSON_OBJECT(
+                                       'id_grupo'     VALUE id_grupo,
+                                       'nombre_grupo' VALUE nombre_grupo,
+                                   -- Apply workaround for nombre_curso
+                                       'nombre_curso' VALUE '"' || REPLACE(nombre_curso, '"', '\"') || '"'
+                                       FORMAT JSON -- Keep FORMAT JSON, it might help with other fields
+                               )
+                       ),
+                       JSON_ARRAY()
                )
-        INTO res
-        from (select g.ID_GRUPO id_grupo,
-                     g.NOMBRE   nombre_grupo,
-                     c.NOMBRE   nombre_curso
-              from docente d
-                       join grupo g on (d.ID_DOCENTE = p_id_usuario AND d.id_docente = g.id_docente)
-                       join curso c on (c.id_curso = g.id_curso));
-
-    else
-        -- Retornar los grupos de un alumno.
-        SELECT JSON_ARRAYAGG(
-                       JSON_OBJECT(
-                               'id_grupo' VALUE id_grupo,
-                               'nombre_grupo' VALUE nombre_grupo,
-                               'nombre_curso' VALUE nombre_curso
-                               FORMAT JSON
-                       )
+        INTO v_json_result
+        FROM (
+                 SELECT g.ID_GRUPO id_grupo,
+                        g.NOMBRE   nombre_grupo,
+                        c.NOMBRE   nombre_curso
+                 FROM docente d
+                          JOIN grupo g ON (d.ID_DOCENTE = g.id_docente)
+                          JOIN curso c ON (c.id_curso = g.id_curso)
+                 WHERE d.ID_DOCENTE = p_id_usuario
+             );
+    ELSIF LOWER(rol_in) = 'alumno' THEN
+        SELECT COALESCE(
+                       JSON_ARRAYAGG(
+                               JSON_OBJECT(
+                                       'id_grupo'     VALUE id_grupo,
+                                       'nombre_grupo' VALUE nombre_grupo,
+                                   -- Apply workaround for nombre_curso
+                                       'nombre_curso' VALUE '"' || REPLACE(nombre_curso, '"', '\"') || '"'
+                                       FORMAT JSON
+                               )
+                       ),
+                       JSON_ARRAY()
                )
-        INTO res
-        from (select ag.ID_GRUPO id_grupo, g.NOMBRE nombre_grupo, c.NOMBRE nombre_curso
-              from alumno_grupo ag
-                       join grupo g on (ag.id_grupo = g.id_grupo)
-                       join curso c on (c.id_curso = g.id_curso)
-              where ag.id_alumno = p_id_usuario);
-    end if;
-end;
+        INTO v_json_result
+        FROM (
+                 SELECT ag.ID_GRUPO id_grupo, g.NOMBRE nombre_grupo, c.NOMBRE nombre_curso
+                 FROM alumno_grupo ag
+                          JOIN grupo g ON (ag.id_grupo = g.id_grupo)
+                          JOIN curso c ON (c.id_curso = g.id_curso)
+                 WHERE ag.id_alumno = p_id_usuario
+             );
+    ELSE
+        v_json_result := JSON_ARRAY();
+    END IF;
+
+    res := v_json_result;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error in get_grupos_por_usuario: ' || SQLERRM);
+        -- Return a valid JSON error object
+        res := JSON_OBJECT('error' VALUE ('Error en el procedimiento almacenado: ' || SQLERRM) FORMAT JSON);
+END get_grupos_por_usuario;
+
 
 -- obtenerExamenesPresentadosAlumnoGrupo()
 -- @descripción: Se encarga de obtener la presentacion_examen de un alumno específico en un grupo específico
