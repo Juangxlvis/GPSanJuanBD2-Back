@@ -18,7 +18,6 @@ import java.lang.reflect.Type;
 import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
-
 @Service
 @AllArgsConstructor
 public class AlumnoServiceImp implements AlumnoService {
