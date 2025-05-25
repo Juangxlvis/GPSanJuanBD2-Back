@@ -101,8 +101,13 @@ public class DocenteServiceImp implements DocenteService {
         storedProcedure.registerStoredProcedureParameter("v_id_tema", Integer.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_id_docente", Integer.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_id_grupo", Integer.class, ParameterMode.IN);
+        storedProcedure.registerStoredProcedureParameter("v_pct_facil",       Integer.class, ParameterMode.IN);
+        storedProcedure.registerStoredProcedureParameter("v_pct_media",       Integer.class, ParameterMode.IN);
+        storedProcedure.registerStoredProcedureParameter("v_pct_dificil",     Integer.class, ParameterMode.IN);
+        storedProcedure.registerStoredProcedureParameter("v_modo",            String.class,  ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_mensaje", String.class, ParameterMode.OUT);
         storedProcedure.registerStoredProcedureParameter("v_error", String.class, ParameterMode.OUT);
+
 
         storedProcedure.setParameter("v_tiempo_max", examenDTO.tiempo_maximo());
         storedProcedure.setParameter("v_numero_preguntas", examenDTO.numero_preguntas());
@@ -118,8 +123,21 @@ public class DocenteServiceImp implements DocenteService {
         storedProcedure.setParameter("v_id_tema", examenDTO.tema_id());
         storedProcedure.setParameter("v_id_docente", examenDTO.docente_id());
         storedProcedure.setParameter("v_id_grupo", examenDTO.grupo_id());
+        storedProcedure.setParameter("v_pct_facil", examenDTO.pct_facil());
+        storedProcedure.setParameter("v_pct_media", examenDTO.pct_media());
+        storedProcedure.setParameter("v_pct_dificil", examenDTO.pct_dificil());
+        storedProcedure.setParameter("v_modo", examenDTO.modoAsignacion());
 
-        return "Examen creado exitosamente";
+        storedProcedure.execute();
+
+        // Leer mensaje de salida
+        String mensaje = (String) storedProcedure.getOutputParameterValue("v_mensaje");
+        String error   = (String) storedProcedure.getOutputParameterValue("v_error");
+        if (error != null && !error.isBlank()) {
+            throw new RuntimeException("Error al crear examen: " + error);
+        }
+        return mensaje;
+
     }
 
     @Override

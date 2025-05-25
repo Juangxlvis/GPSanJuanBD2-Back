@@ -462,39 +462,272 @@ BEGIN
 END get_horario_grupo;
 /
 
-CREATE OR REPLACE PROCEDURE crear_examen(
-    v_tiempo_max             IN examen.tiempo_max%TYPE,
-    v_numero_preguntas       IN examen.numero_preguntas%TYPE,
-    v_porcentaje_curso       IN examen.porcentaje_curso%TYPE,
-    v_nombre                 IN examen.nombre%TYPE,
-    v_descripcion            IN examen.descripcion%TYPE,
-    v_porcentaje_aprobatorio IN examen.porcentaje_aprobatorio%TYPE,
-    v_fecha_inicio           IN examen.fecha_hora_inicio%TYPE,
-    v_fecha_fin              IN examen.fecha_hora_fin%TYPE,
-    v_num_preguntas_aleatorias IN examen.num_preguntas_aleatorias%TYPE,
-    v_id_tema                IN examen.id_tema%TYPE,
-    v_id_docente             IN examen.id_docente%TYPE,  
-    v_id_grupo               IN examen.id_grupo%TYPE,
-    v_mensaje                OUT VARCHAR2
-) AS
-BEGIN
-    INSERT INTO examen(
-        tiempo_max, numero_preguntas, porcentaje_curso, nombre, descripcion,
-        porcentaje_aprobatorio, fecha_hora_inicio, fecha_hora_fin, num_preguntas_aleatorias,
-        id_tema, id_docente, id_grupo, estado
-    ) VALUES (
-        v_tiempo_max, v_numero_preguntas, v_porcentaje_curso, v_nombre, v_descripcion,
-        v_porcentaje_aprobatorio, v_fecha_inicio, v_fecha_fin, v_num_preguntas_aleatorias,
-        v_id_tema, v_id_docente, v_id_grupo, 'Activa'
-    );
 
-    v_mensaje := 'Examen creado exitosamente';
+CREATE OR REPLACE PROCEDURE crear_examen(
+    -- Parámetros básicos
+    p_tiempo_max               IN examen.tiempo_max%TYPE,
+    p_numero_preguntas         IN examen.numero_preguntas%TYPE,
+    p_porcentaje_curso         IN examen.porcentaje_curso%TYPE,
+    p_nombre                   IN examen.nombre%TYPE,
+    p_descripcion              IN examen.descripcion%TYPE,
+    p_porcentaje_aprobatorio   IN examen.porcentaje_aprobatorio%TYPE,
+    p_fecha_inicio             IN examen.fecha_hora_inicio%TYPE,
+    p_fecha_fin                IN examen.fecha_hora_fin%TYPE,
+    p_num_preguntas_aleatorias IN examen.num_preguntas_aleatorias%TYPE,
+    p_id_tema                  IN examen.id_tema%TYPE,
+    p_id_docente               IN examen.id_docente%TYPE,
+    p_id_grupo                 IN examen.id_grupo%TYPE,
+    -- Parámetros de balanceo
+    p_pct_facil                IN NUMBER,
+    p_pct_media                IN NUMBER,
+    p_pct_dificil              IN NUMBER,
+    p_modo                     IN VARCHAR2,
+    -- Mensaje de salida
+    p_mensaje                  OUT VARCHAR2
+) AS
+    v_new_id           examen.id_examen%TYPE;
+    v_total_insertadas INTEGER;
+    v_sin_porcentaje   INTEGER;
+    v_count            INTEGER;
+BEGIN
+    ----------------------------------------------------------
+    -- 1) Validar fechas
+    ----------------------------------------------------------
+    IF p_fecha_inicio < TRUNC(SYSDATE) OR p_fecha_fin < p_fecha_inicio THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Fechas inválidas: inicio debe ser ≥ hoy y fin ≥ inicio');
+END IF;
+
+    ----------------------------------------------------------
+    -- 2) Validar que el docente pertenece al grupo
+    ----------------------------------------------------------
+SELECT COUNT(*) INTO v_count
+FROM grupo
+WHERE id_grupo   = p_id_grupo
+  AND id_docente = p_id_docente;
+IF v_count = 0 THEN
+        RAISE_APPLICATION_ERROR(-20002,
+            'El docente no está asignado al grupo '||p_id_grupo);
+END IF;
+
+    ----------------------------------------------------------
+    -- 3) Insertar examen y obtener su ID
+    ----------------------------------------------------------
+INSERT INTO examen(
+    id_examen,
+    tiempo_max, numero_preguntas, porcentaje_curso,
+    nombre, descripcion, porcentaje_aprobatorio,
+    fecha_hora_inicio, fecha_hora_fin, num_preguntas_aleatorias,
+    id_tema, id_docente, id_grupo, estado
+) VALUES (
+             examen_seq.NEXTVAL,
+             p_tiempo_max, p_numero_preguntas, p_porcentaje_curso,
+             p_nombre, p_descripcion, p_porcentaje_aprobatorio,
+             p_fecha_inicio, p_fecha_fin, p_num_preguntas_aleatorias,
+             p_id_tema, p_id_docente, p_id_grupo, 'Activa'
+         )
+    RETURNING id_examen INTO v_new_id;
+
+-- 4) Asignar preguntas 'AUTO' o 'MIXTO'
+
+IF UPPER(p_modo) IN ('AUTO','MIXTO') THEN
+        -- Si es MIXTO, validar que no exceda 50% difíciles
+        IF UPPER(p_modo) = 'MIXTO' THEN
+            IF p_pct_dificil > 50 THEN
+                RAISE_APPLICATION_ERROR(-20003,
+                    'Modo MIXTO no permite más de 50% preguntas difíciles');
+END IF;
+END IF;
+        -- Llamada a la rutina de balanceo
+        asignar_preguntas(
+            p_id_examen   => v_new_id,
+            p_total       => p_numero_preguntas,
+            p_pct_facil   => p_pct_facil,
+            p_pct_media   => p_pct_media,
+            p_pct_dificil => p_pct_dificil
+        );
+END IF;
+
+
+    -- 5) Validar total de preguntas insertadas
+
+SELECT COUNT(*) INTO v_total_insertadas
+FROM pregunta_examen
+WHERE id_examen = v_new_id;
+IF v_total_insertadas != p_numero_preguntas THEN
+        RAISE_APPLICATION_ERROR(-20004,
+            'Total preguntas asignadas ('||v_total_insertadas||') ≠ '||p_numero_preguntas);
+END IF;
+
+    -- 6) Validar que no haya porcentajes NULL
+
+SELECT COUNT(*) INTO v_sin_porcentaje
+FROM pregunta_examen
+WHERE id_examen = v_new_id
+  AND porcentaje_examen IS NULL;
+IF v_sin_porcentaje > 0 THEN
+        RAISE_APPLICATION_ERROR(-20005,
+            'Hay '||v_sin_porcentaje||' preguntas sin porcentaje definido');
+END IF;
+
+    p_mensaje := 'Examen '||v_new_id||' creado exitosamente en modo '||p_modo;
 EXCEPTION
     WHEN OTHERS THEN
-        v_mensaje := 'Error al crear examen: ' || SQLERRM;
+        -- Capturar el error para devolverlo al servicio Java
+        p_mensaje := 'Error al crear examen: '||SUBSTR(SQLERRM,1,200);
 END crear_examen;
 /
 
+
+-- 1) ACTUALIZAR_EXAMEN con restricción si ya hay presentaciones
+CREATE OR REPLACE PROCEDURE actualizar_examen(
+    p_id_examen              IN examen.id_examen%TYPE,
+    p_tiempo_max             IN examen.tiempo_max%TYPE,
+    p_numero_preguntas       IN examen.numero_preguntas%TYPE,
+    p_porcentaje_curso       IN examen.porcentaje_curso%TYPE,
+    p_nombre                 IN examen.nombre%TYPE,
+    p_descripcion            IN examen.descripcion%TYPE,
+    p_porcentaje_aprobatorio IN examen.porcentaje_aprobatorio%TYPE,
+    p_fecha_inicio           IN examen.fecha_hora_inicio%TYPE,
+    p_fecha_fin              IN examen.fecha_hora_fin%TYPE,
+    p_estado                 IN examen.estado%TYPE,
+    p_mensaje                OUT VARCHAR2
+) AS
+    v_count_presentaciones NUMBER;
+BEGIN
+SELECT COUNT(*)
+INTO v_count_presentaciones
+FROM presentacion_examen
+WHERE id_examen = p_id_examen;
+
+IF v_count_presentaciones > 0 THEN
+        p_mensaje := 'No se puede modificar el examen: ya tiene presentaciones registradas';
+        RETURN;
+END IF;
+
+UPDATE examen
+SET tiempo_max             = p_tiempo_max,
+    numero_preguntas       = p_numero_preguntas,
+    porcentaje_curso       = p_porcentaje_curso,
+    nombre                 = p_nombre,
+    descripcion            = p_descripcion,
+    porcentaje_aprobatorio = p_porcentaje_aprobatorio,
+    fecha_hora_inicio      = p_fecha_inicio,
+    fecha_hora_fin         = p_fecha_fin,
+    estado                 = p_estado
+WHERE id_examen = p_id_examen;
+
+p_mensaje := 'Examen actualizado exitosamente';
+EXCEPTION
+    WHEN OTHERS THEN
+        p_mensaje := 'Error al actualizar examen: ' || SQLERRM;
+END actualizar_examen;
+/
+
+
+-- 2) ASIGNAR_PREGUNTAS en base a dificultad y tu tabla PREGUNTA_EXAMEN
+CREATE OR REPLACE PROCEDURE asignar_preguntas(
+    p_id_examen   IN NUMBER,
+    p_total       IN NUMBER,
+    p_pct_facil   IN NUMBER,
+    p_pct_media   IN NUMBER,
+    p_pct_dificil IN NUMBER
+) AS
+    n_facil   PLS_INTEGER;
+    n_media   PLS_INTEGER;
+    n_dificil PLS_INTEGER;
+    v_pct     NUMBER := ROUND(100/p_total,2);
+BEGIN
+    -- Calcula cuántas preguntas de cada nivel
+    n_facil   := ROUND(p_total * p_pct_facil/100);
+    n_media   := ROUND(p_total * p_pct_media/100);
+    n_dificil := p_total - n_facil - n_media;
+
+    -- Fácil
+INSERT INTO pregunta_examen(
+    porcentaje_examen,
+    tiempo_pregunta,
+    tiene_tiempo_maximo,
+    id_pregunta,
+    id_examen,
+    origen
+)
+SELECT
+    v_pct,
+    NULL,
+    'N',
+    p.id_pregunta,
+    p_id_examen,
+    'AUTO'
+FROM pregunta p
+WHERE p.id_tema = (SELECT id_tema FROM examen WHERE id_examen = p_id_examen)
+  AND p.dificultad = 'F'
+  AND ROWNUM <= n_facil;
+
+-- Media
+INSERT INTO pregunta_examen(
+    porcentaje_examen, tiempo_pregunta, tiene_tiempo_maximo,
+    id_pregunta, id_examen, origen
+)
+SELECT
+    v_pct, NULL, 'N',
+    p.id_pregunta, p_id_examen, 'AUTO'
+FROM pregunta p
+WHERE p.id_tema = (SELECT id_tema FROM examen WHERE id_examen = p_id_examen)
+  AND p.dificultad = 'M'
+  AND ROWNUM <= n_media;
+
+-- Difícil
+INSERT INTO pregunta_examen(
+    porcentaje_examen, tiempo_pregunta, tiene_tiempo_maximo,
+    id_pregunta, id_examen, origen
+)
+SELECT
+    v_pct, NULL, 'N',
+    p.id_pregunta, p_id_examen, 'AUTO'
+FROM pregunta p
+WHERE p.id_tema = (SELECT id_tema FROM examen WHERE id_examen = p_id_examen)
+  AND p.dificultad = 'D'
+  AND ROWNUM <= n_dificil;
+END asignar_preguntas;
+/
+
+
+-- 2) ACTUALIZAR_PREGUNTA con restricción si ya fue presentada
+CREATE OR REPLACE PROCEDURE actualizar_pregunta(
+    p_id_pregunta     IN pregunta.id_pregunta%TYPE,
+    p_enunciado       IN pregunta.enunciado%TYPE,
+    p_es_publica      IN pregunta.es_publica%TYPE,
+    p_tipo_pregunta   IN pregunta.tipo_pregunta%TYPE,
+    p_estado          IN pregunta.estado%TYPE,
+    p_mensaje         OUT VARCHAR2
+) AS
+    v_count_presentada NUMBER;
+BEGIN
+SELECT COUNT(*)
+INTO v_count_presentada
+FROM presentacion_pregunta pp
+         JOIN pregunta_examen pe ON pp.id_pregunta = pe.id_pregunta
+WHERE pe.id_pregunta = p_id_pregunta;
+
+IF v_count_presentada > 0 THEN
+        p_mensaje := 'No se puede modificar la pregunta: ya fue presentada en un examen';
+        RETURN;
+END IF;
+
+
+UPDATE pregunta
+SET enunciado     = p_enunciado,
+    es_publica    = p_es_publica,
+    tipo_pregunta = p_tipo_pregunta,
+    estado        = p_estado
+WHERE id_pregunta = p_id_pregunta;
+
+p_mensaje := 'Pregunta actualizada exitosamente';
+EXCEPTION
+    WHEN OTHERS THEN
+        p_mensaje := 'Error al actualizar pregunta: ' || SQLERRM;
+END actualizar_pregunta;
+/
 
 
 -- 5. Inscribir alumno a grupo
@@ -743,7 +976,7 @@ BEGIN
             id_docente
         FROM pregunta
         WHERE id_tema = v_id_tema
-          AND estado = 'Activa';
+          AND estado = 'ACTIVA';
 END obtener_banco_preguntas;
 /
 
@@ -762,7 +995,7 @@ BEGIN
             id_docente
         FROM pregunta
         WHERE id_docente = v_id_docente
-          AND estado     = 'Activa';
+          AND estado     = 'ACTIVA';
 END obtener_preguntas_docente;
 /
 
@@ -789,7 +1022,7 @@ BEGIN
             estado
         FROM examen
         WHERE id_docente = v_id_docente
-        AND estado     = 'Activa'   -- opcional: solo exámenes activos
+        AND estado     = 'ACTIVO'   -- opcional: solo exámenes activos
         ORDER BY fecha_hora_inicio;
 END obtener_examenes_docente;
 /
@@ -822,69 +1055,228 @@ CREATE OR REPLACE PROCEDURE responder_pregunta(
     p_id_respuesta           IN NUMBER,
     p_mensaje                OUT VARCHAR2
 ) AS
+    v_terminado CHAR(1);
+    v_id_examen NUMBER;
 BEGIN
-    INSERT INTO presentacion_pregunta (
-        id_presentacion_pregunta,
-        respuesta_correcta,
-        id_pregunta,
-        id_respuesta,
-        id_presentacion_examen
-    ) VALUES (
-        presentacion_pregunta_seq.NEXTVAL,  -- secuencia para PK
-        NULL,                               -- se calificará más tarde
-        p_id_pregunta,
-        p_id_respuesta,
-        p_id_presentacion_examen
-    );
+    -- 1. Verificar que la presentación existe y no está finalizada
+SELECT terminado, id_examen
+INTO v_terminado, v_id_examen
+FROM presentacion_examen
+WHERE id_presentacion_examen = p_id_presentacion_examen;
 
-    p_mensaje := 'Respuesta registrada correctamente';
+IF v_terminado = '1' THEN
+        p_mensaje := 'La presentación ya fue finalizada, no puede responder más preguntas';
+        RETURN;
+END IF;
+
+    -- 2. Verificar que la pregunta pertenece al examen
+    DECLARE
+v_count NUMBER;
+BEGIN
+SELECT COUNT(*)
+INTO v_count
+FROM pregunta_examen pe
+WHERE pe.id_examen   = v_id_examen
+  AND pe.id_pregunta = p_id_pregunta;
+IF v_count = 0 THEN
+            p_mensaje := 'La pregunta no pertenece a este examen';
+            RETURN;
+END IF;
+END;
+
+    -- 3. Insertar la respuesta
+INSERT INTO presentacion_pregunta (
+    id_presentacion_pregunta,
+    id_presentacion_examen,
+    id_pregunta,
+    id_respuesta,
+    respuesta_correcta  -- queda NULL hasta calificación
+) VALUES (
+             presentacion_pregunta_seq.NEXTVAL,
+             p_id_presentacion_examen,
+             p_id_pregunta,
+             p_id_respuesta,
+             NULL
+         );
+
+p_mensaje := 'Respuesta registrada correctamente';
+
 EXCEPTION
-    WHEN DUP_VAL_ON_INDEX THEN
-        p_mensaje := 'Ya existe respuesta para esta pregunta en la presentación';
-    WHEN OTHERS THEN
+    WHEN NO_DATA_FOUND THEN
+        p_mensaje := 'Presentación de examen no encontrada';
+WHEN DUP_VAL_ON_INDEX THEN
+        p_mensaje := 'Ya existe una respuesta para esta pregunta';
+WHEN OTHERS THEN
         p_mensaje := 'Error al registrar respuesta: ' || SQLERRM;
 END responder_pregunta;
 /
+
+
+
 CREATE OR REPLACE PROCEDURE finalizar_presentacion_examen(
     p_id_presentacion_examen IN NUMBER,
     p_mensaje                OUT VARCHAR2
 ) AS
-    v_total_preguntas    NUMBER;
-    v_correctas          NUMBER;
+    v_terminado          CHAR(1);
+    v_id_examen          NUMBER;
+    v_ex_f_ini           DATE;
+    v_ex_f_fin           DATE;
+    v_peso_total         NUMBER;
+    v_peso_correcto      NUMBER;
     v_nota_final         NUMBER;
 BEGIN
-    -- Contamos cuántas preguntas tuvo la presentación
-    SELECT COUNT(*) 
-      INTO v_total_preguntas
-      FROM presentacion_pregunta
-     WHERE id_presentacion_examen = p_id_presentacion_examen;
+    -- 1. Validar existencia y estado
+SELECT terminado, id_examen
+INTO v_terminado, v_id_examen
+FROM presentacion_examen
+WHERE id_presentacion_examen = p_id_presentacion_examen;
 
-    IF v_total_preguntas = 0 THEN
-        p_mensaje := 'No hay preguntas asociadas a esta presentación';
+IF v_terminado = '1' THEN
+        p_mensaje := 'La presentación ya fue finalizada';
         RETURN;
-    END IF;
+END IF;
 
-    -- Contamos cuántas respuestas resultaron correctas
-    SELECT COUNT(*) 
-      INTO v_correctas
-      FROM presentacion_pregunta
-     WHERE id_presentacion_examen = p_id_presentacion_examen
-       AND respuesta_correcta = 'S';
+    -- 2. Validar ventana de tiempo contra la configuración del examen
+SELECT fecha_hora_inicio, fecha_hora_fin
+INTO v_ex_f_ini, v_ex_f_fin
+FROM examen
+WHERE id_examen = v_id_examen;
 
-    -- Calculamos la nota como proporción de correctas * 100
-    v_nota_final := ROUND((v_correctas / v_total_preguntas) * 100, 2);
+IF SYSDATE < v_ex_f_ini OR SYSDATE > v_ex_f_fin THEN
+        p_mensaje := 'Fuera de la ventana de presentación del examen';
+        RETURN;
+END IF;
 
-    -- Actualizamos la presentación
-    UPDATE presentacion_examen
-       SET terminado    = '1',
-           calificacion = v_nota_final
-     WHERE id_presentacion_examen = p_id_presentacion_examen;
+    -- 3. Calcular peso total configurado para el examen (debe sumar idealmente 100)
+SELECT NVL(SUM(porcentaje_examen), 0)
+INTO v_peso_total
+FROM pregunta_examen
+WHERE id_examen = v_id_examen;
 
-    p_mensaje := 'Presentación finalizada. Nota final: ' || v_nota_final;
+IF v_peso_total = 0 THEN
+        p_mensaje := 'No hay preguntas asignadas al examen';
+        RETURN;
+END IF;
+
+    -- 4. Calcular peso acumulado de respuestas correctas
+SELECT NVL(SUM(pe.porcentaje_examen), 0)
+INTO v_peso_correcto
+FROM presentacion_pregunta pp
+         JOIN pregunta_examen pe
+              ON pp.id_pregunta = pe.id_pregunta
+                  AND pp.id_presentacion_examen = pe.id_examen
+WHERE pp.id_presentacion_examen = p_id_presentacion_examen
+  AND pp.respuesta_correcta = 'S';
+
+-- 5. Calcular nota final proporcional
+v_nota_final := ROUND((v_peso_correcto / v_peso_total) * 100, 2);
+
+    -- 6. Actualizar presentación
+UPDATE presentacion_examen
+SET terminado    = '1',
+    calificacion = v_nota_final
+WHERE id_presentacion_examen = p_id_presentacion_examen;
+
+p_mensaje := 'Presentación finalizada. Nota final: ' || v_nota_final;
+
 EXCEPTION
     WHEN NO_DATA_FOUND THEN
-        p_mensaje := 'Presentación no encontrada';
-    WHEN OTHERS THEN
+        p_mensaje := 'Presentación o examen no encontrada';
+WHEN OTHERS THEN
         p_mensaje := 'Error al finalizar presentación: ' || SQLERRM;
 END finalizar_presentacion_examen;
+/
+
+
+
+
+CREATE OR REPLACE PROCEDURE iniciar_presentacion_examen(
+    p_id_examen           IN  NUMBER,
+    p_id_alumno           IN  NUMBER,
+    p_ip                  IN  VARCHAR2,
+    p_id_presentacion     OUT NUMBER,
+    p_mensaje             OUT VARCHAR2
+) AS
+    -- Variables auxiliares
+    v_estado       examen.estado%TYPE;
+    v_inicio       examen.fecha_hora_inicio%TYPE;
+    v_fin          examen.fecha_hora_fin%TYPE;
+    v_grupo        examen.id_grupo%TYPE;
+    v_pertenece    NUMBER;
+    v_intentos     NUMBER;
+    -- (Opcional) Límite máximo de intentos por examen
+    v_max_intentos CONSTANT NUMBER := 3;
+BEGIN
+    -- 1) Obtener datos del examen
+BEGIN
+SELECT estado, fecha_hora_inicio, fecha_hora_fin, id_grupo
+INTO v_estado, v_inicio, v_fin, v_grupo
+FROM examen
+WHERE id_examen = p_id_examen;
+EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            p_mensaje := 'Examen no encontrado';
+            RETURN;
+END;
+
+    -- 2) Validar que esté activo y en rango de fechas
+    IF v_estado != 'Activa' THEN
+        p_mensaje := 'El examen no está activo';
+        RETURN;
+    ELSIF SYSDATE < v_inicio OR SYSDATE > v_fin THEN
+        p_mensaje := 'El examen no está disponible en este horario';
+        RETURN;
+END IF;
+
+    -- 3) Validar que el alumno pertenezca al grupo
+SELECT COUNT(*)
+INTO v_pertenece
+FROM alumno_grupo
+WHERE id_alumno = p_id_alumno
+  AND id_grupo  = v_grupo;
+
+IF v_pertenece = 0 THEN
+        p_mensaje := 'El alumno no pertenece al grupo de este examen';
+        RETURN;
+END IF;
+
+    -- 4) (Opcional) Verificar número de intentos
+SELECT COUNT(*)
+INTO v_intentos
+FROM presentacion_examen
+WHERE id_examen = p_id_examen
+  AND id_alumno = p_id_alumno;
+
+IF v_intentos >= v_max_intentos THEN
+        p_mensaje := 'Ha alcanzado el número máximo de intentos (' || v_max_intentos || ')';
+        RETURN;
+END IF;
+
+    -- 5) Insertar la presentación y devolver el nuevo ID
+INSERT INTO presentacion_examen (
+    id_presentacion_examen,
+    tiempo,
+    terminado,
+    calificacion,
+    ip_source,
+    fecha_hora_presentacion,
+    id_examen,
+    id_alumno
+) VALUES (
+             presentacion_examen_seq.NEXTVAL,
+             NULL,
+             'N',
+             0,
+             p_ip,
+             SYSDATE,
+             p_id_examen,
+             p_id_alumno
+         )
+    RETURNING id_presentacion_examen INTO p_id_presentacion;
+
+p_mensaje := 'Presentación iniciada (ID=' || p_id_presentacion || ')';
+EXCEPTION
+    WHEN OTHERS THEN
+        p_mensaje := 'Error al iniciar presentación: ' || SQLERRM;
+END iniciar_presentacion_examen;
 /

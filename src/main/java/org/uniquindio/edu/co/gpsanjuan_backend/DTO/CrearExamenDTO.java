@@ -12,6 +12,10 @@ public record CrearExamenDTO(
         Integer numero_preguntas_aleatorias,
         Integer tema_id,
         Integer docente_id,
-        Integer grupo_id
+        Integer grupo_id,
+        Integer pct_facil,
+        Integer pct_media,
+        Integer pct_dificil,
+        String modoAsignacion //"AUTO", "MANUAL" o "MIXTO"
 ) {
 }
