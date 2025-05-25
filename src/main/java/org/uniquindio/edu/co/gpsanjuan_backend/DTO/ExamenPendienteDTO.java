@@ -9,8 +9,8 @@ public record ExamenPendienteDTO(
         Integer porcentaje_aprobatorio,
         String nombre,
         Integer porcentaje_curso,
-        LocalDateTime fecha_hora_inicio,
-        LocalDateTime fecha_hora_fin,
+        String fecha_hora_inicio,
+        String fecha_hora_fin,
         String tema
 ) {
 }
