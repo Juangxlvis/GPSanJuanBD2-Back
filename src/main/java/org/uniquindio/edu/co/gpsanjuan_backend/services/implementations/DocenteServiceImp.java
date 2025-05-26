@@ -2,6 +2,7 @@ package org.uniquindio.edu.co.gpsanjuan_backend.services.implementations;
 
 
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.ParameterMode;
@@ -24,6 +25,7 @@ import java.lang.reflect.Type;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -258,7 +260,7 @@ public class DocenteServiceImp implements DocenteService {
 
         // Establecer los valores de los parámetros de entrada
         storedProcedure.setParameter("p_id_usuario", id);
-        storedProcedure.setParameter("rol", "alumno");
+        storedProcedure.setParameter("rol", rol);
 
         // Ejecutar el procedimiento almacenado
         storedProcedure.execute();
@@ -281,17 +283,29 @@ public class DocenteServiceImp implements DocenteService {
 
         // Establecer los valores de los parámetros de entrada
         storedProcedure.setParameter("p_id_usuario", id);
-        storedProcedure.setParameter("rol", "alumno");
+        storedProcedure.setParameter("rol", rol);
 
         // Ejecutar el procedimiento almacenado
         storedProcedure.execute();
 
         String json1 = (String) storedProcedure.getOutputParameterValue("res");
 
+        System.out.println("JSON from DB for get_grupos_por_usuario (ID " + id + ", Rol " + rol + "): |" + json1 + "|");
+        if (json1 == null || json1.trim().isEmpty() || json1.equalsIgnoreCase("null")) { // Handle "null" string too
+            System.out.println("No JSON data returned from DB, returning empty list.");
+            return new ArrayList<>();
+        }
         Gson gson = new Gson();
         Type personListType = new TypeToken<List<CursoDTO>>() {}.getType();
 
-        return gson.fromJson(json1, personListType);
+        try {
+            return gson.fromJson(json1, personListType);
+        } catch (JsonSyntaxException e) {
+            System.err.println("RAW JSON causing error: |" + json1 + "|"); // Log it again on error
+            System.err.println("Error parsing JSON with Gson: ");
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
     }
 
 
