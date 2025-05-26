@@ -439,31 +439,32 @@ END get_banco_preguntas;
 
 
 -- 2. CRUD de opciones de respuesta
-CREATE OR REPLACE PROCEDURE crear_respuesta(
+create or replace PROCEDURE crear_respuesta(
     v_descripcion   IN RESPUESTA.DESCRIPCION%TYPE,
     v_es_verdadera  IN RESPUESTA.ES_VERDADERA%TYPE,
-    v_id_pregunta   IN RESPUESTA.ID_PREGUNTA%TYPE,
+    v_id_pregunta   IN RESPUESTA.ID_PREGUNTA%TYPE, -- Parámetro para ID_PREGUNTA
     v_mensaje       OUT VARCHAR2
 ) AS
 BEGIN
-    INSERT INTO RESPUESTA (
-        ID_RESPUESTA,
-        DESCRIPCION,
-        ES_VERDADERA,
-        ID_PREGUNTA
-    )
-    VALUES (
-        RESPUESTA_SEQ.NEXTVAL,   -- genera el nuevo ID
-        v_descripcion,
-        v_es_verdadera,
-        v_id_pregunta
-    );
-    v_mensaje := 'Respuesta creada exitosamente';
+INSERT INTO RESPUESTA (
+    ID_RESPUESTA,
+    DESCRIPCION,
+    ES_VERDADERA,
+    ID_PREGUNTA -- Se incluye en la lista de columnas
+)
+VALUES (
+           RESPUESTA_SEQ.NEXTVAL,
+           v_descripcion,
+           v_es_verdadera,
+           v_id_pregunta -- Se usa el parámetro v_id_pregunta
+       );
+v_mensaje := 'Respuesta creada exitosamente';
 EXCEPTION
     WHEN OTHERS THEN
         v_mensaje := 'Error al crear respuesta: ' || SQLERRM;
 END crear_respuesta;
-/
+
+
 CREATE OR REPLACE PROCEDURE actualizar_respuesta(
     v_id_respuesta  IN RESPUESTA.ID_RESPUESTA%TYPE,
     v_descripcion   IN RESPUESTA.DESCRIPCION%TYPE,
@@ -1446,4 +1447,145 @@ EXCEPTION
 END iniciar_presentacion_examen;
 /
 
+--TRIGGERS ====================================================================================================================================
 --TRIGGERS
+
+
+CREATE OR REPLACE TRIGGER trg_agregar_preguntas_examen
+AFTER UPDATE OF estado ON examen
+    FOR EACH ROW
+    WHEN (NEW.estado = 'PUBLICADO')
+DECLARE
+v_disponibles   INTEGER;
+  v_cant_seleccionadas INTEGER;
+  v_id_pregunta   NUMBER;
+BEGIN
+
+SELECT COUNT(*) INTO v_cant_seleccionadas
+FROM pregunta_examen
+WHERE id_examen = :NEW.id_examen;
+
+SELECT COUNT(*) INTO v_disponibles
+FROM pregunta p
+WHERE p.id_tema = :NEW.id_tema
+  AND p.es_publica = '1'
+  AND p.id_pregunta NOT IN (
+    SELECT pe.id_pregunta
+    FROM pregunta_examen pe
+    WHERE pe.id_examen = :NEW.id_examen
+);
+
+IF v_cant_seleccionadas + v_disponibles < :NEW.numero_preguntas THEN
+    RAISE_APPLICATION_ERROR(-20002, 'No hay suficientes preguntas para llenar el examen');
+END IF;
+
+FOR i IN v_cant_seleccionadas+1 .. :NEW.numero_preguntas LOOP
+SELECT id_pregunta
+INTO v_id_pregunta
+FROM (
+         SELECT p.id_pregunta
+         FROM pregunta p
+         WHERE p.id_tema = :NEW.id_tema
+           AND p.es_publica = '1'
+           AND p.id_pregunta NOT IN (
+             SELECT pe.id_pregunta FROM pregunta_examen pe
+             WHERE pe.id_examen = :NEW.id_examen
+         )
+         ORDER BY DBMS_RANDOM.RANDOM
+     ) WHERE ROWNUM = 1;
+
+INSERT INTO pregunta_examen (id_examen, id_pregunta, tiene_tiempo_maximo, origen)
+VALUES (:NEW.id_examen, v_id_pregunta, 'N', 'AUTO');
+END LOOP;
+END;
+
+--Fijar la fecha/hora de presentación automático.
+CREATE OR REPLACE TRIGGER trg_establecer_hora_presentacion
+BEFORE INSERT ON presentacion_examen
+FOR EACH ROW
+BEGIN
+  IF SYSDATE > (SELECT fecha_hora_fin
+                  FROM examen
+                 WHERE id_examen = :NEW.id_examen) THEN
+    RAISE_APPLICATION_ERROR(-20007,
+      'La presentación excede la fecha y hora de fin del examen');
+END IF;
+
+  :NEW.FECHA_HORA_PRESENTACION := SYSDATE;
+END;
+
+
+
+
+-- TRIGGER QUE SOLO PERMITE LA MODIFICACION DE LA PRESENTACION --EXAMEN SI LA FECHA FINAL DEL EXAMEN ASOCIADO NO ES MENOR A LA --FECHA ACTUAL
+CREATE OR REPLACE TRIGGER trg_verificar_fecha_presentacion
+BEFORE UPDATE ON presentacion_examen
+                  FOR EACH ROW
+DECLARE
+v_fecha_final DATE;
+BEGIN
+SELECT fecha_hora_fin INTO v_fecha_final FROM examen WHERE id_examen = :NEW.id_examen;
+IF v_fecha_final < SYSDATE THEN
+        RAISE_APPLICATION_ERROR(-20001, 'no se puede modificar la presentacion del examen porque la fecha final del examen ya ha pasado');
+END IF;
+END;
+
+-- este trigger verifica que el tema de la pregunta que se va a adicionar al examen --sea exactamente el mismo que el tema del examen
+
+CREATE OR REPLACE TRIGGER verificar_pregunta_examen
+BEFORE INSERT ON pregunta_examen
+FOR EACH ROW
+DECLARE
+v_id_tema_examen pregunta.id_tema%TYPE;
+    v_id_tema_pregunta pregunta.id_tema%TYPE;
+BEGIN
+SELECT id_tema INTO v_id_tema_examen FROM examen WHERE id_examen = :NEW.id_examen;
+SELECT id_tema INTO v_id_tema_pregunta FROM pregunta WHERE id_pregunta = :NEW.id_pregunta;
+IF v_id_tema_examen != v_id_tema_pregunta THEN
+        RAISE_APPLICATION_ERROR(-20003, 'la pregunta no pertenece al tema del examen');
+END IF;
+END;
+
+-- este trigger verifica que la pregunta que se va a adicionar al examen no pueda --ser una pregunta hija
+
+CREATE OR REPLACE TRIGGER verificar_pregunta_hija
+BEFORE INSERT ON pregunta_examen
+FOR EACH ROW
+DECLARE
+v_id_pregunta_compuesta pregunta.id_pregunta_compuesta%TYPE;
+BEGIN
+SELECT id_pregunta_compuesta INTO v_id_pregunta_compuesta FROM pregunta WHERE id_pregunta = :NEW.id_pregunta;
+IF v_id_pregunta_compuesta IS NOT NULL THEN
+        RAISE_APPLICATION_ERROR(-20004, 'la pregunta no puede ser hija de otra pregunta');
+END IF;
+END;
+
+-- este trigger verifica que un examen que ya está en estado publicado no pueda --ser modificado o eliminado si algún estudiante ya ha presentado dicho examen
+-- no se toma el estado del examen en cuenta ya que se asume que un examen --que ha sido presentado está en estado publicado
+CREATE OR REPLACE TRIGGER verificar_examen_presentado
+BEFORE UPDATE OR DELETE ON examen
+    FOR EACH ROW
+DECLARE
+v_presentaciones INTEGER;
+BEGIN
+SELECT COUNT(*) INTO v_presentaciones FROM presentacion_examen WHERE id_examen = :OLD.id_examen;
+IF v_presentaciones > 0 THEN
+        RAISE_APPLICATION_ERROR(-20005, 'el examen ya ha sido presentado por un estudiante');
+END IF;
+END;
+
+-- este trigger verifica que el alumno que va a presentar un examen pertenezca al --grupo al cual se asignó el examen
+CREATE OR REPLACE TRIGGER verificar_alumno_grupo
+BEFORE INSERT ON presentacion_examen
+FOR EACH ROW
+DECLARE
+v_id_grupo examen.id_grupo%TYPE;
+    v_id_grupo_alumno alumno.id_grupo%TYPE;
+BEGIN
+SELECT id_grupo INTO v_id_grupo FROM examen WHERE id_examen = :NEW.id_examen;
+SELECT id_grupo INTO v_id_grupo_alumno FROM alumno WHERE id_alumno = :NEW.id_alumno;
+IF v_id_grupo != v_id_grupo_alumno THEN
+        RAISE_APPLICATION_ERROR(-20006, 'el alumno no pertenece al grupo al cual se asignó el examen');
+END IF;
+END;
+
