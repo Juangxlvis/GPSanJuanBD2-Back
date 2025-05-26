@@ -98,8 +98,8 @@ public class DocenteServiceImp implements DocenteService {
         storedProcedure.registerStoredProcedureParameter("v_nombre", String.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_descripcion", String.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_porcentaje_aprobatorio", Float.class, ParameterMode.IN);
-        storedProcedure.registerStoredProcedureParameter("v_fecha_hora_inicio", String.class, ParameterMode.IN);
-        storedProcedure.registerStoredProcedureParameter("v_fecha_hora_fin", String.class, ParameterMode.IN);
+        storedProcedure.registerStoredProcedureParameter("p_fecha_inicio_str", String.class, ParameterMode.IN);
+        storedProcedure.registerStoredProcedureParameter("p_fecha_fin_str", String.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_num_preguntas_aleatorias", Integer.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_id_tema", Integer.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_id_docente", Integer.class, ParameterMode.IN);
@@ -119,8 +119,8 @@ public class DocenteServiceImp implements DocenteService {
         storedProcedure.setParameter("v_descripcion", examenDTO.descripcion());
         storedProcedure.setParameter("v_porcentaje_aprobatorio", examenDTO.porcentaje_aprobatorio());
 
-        storedProcedure.setParameter("v_fecha_hora_inicio", examenDTO.fecha_hora_inicio());
-        storedProcedure.setParameter("v_fecha_hora_fin", examenDTO.fecha_hora_limite());
+        storedProcedure.setParameter("p_fecha_inicio_str", examenDTO.fecha_hora_inicio());
+        storedProcedure.setParameter("p_fecha_fin_str", examenDTO.fecha_hora_limite());
 
         storedProcedure.setParameter("v_num_preguntas_aleatorias", examenDTO.numero_preguntas_aleatorias());
         storedProcedure.setParameter("v_id_tema", examenDTO.tema_id());

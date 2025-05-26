@@ -685,6 +685,140 @@ END IF;
 END IF;
 
 
+CREATE OR REPLACE PROCEDURE crear_examen(
+    -- Parámetros básicos (IN)
+    p_tiempo_max               IN examen.tiempo_max%TYPE,
+    p_numero_preguntas         IN examen.numero_preguntas%TYPE,
+    p_porcentaje_curso         IN examen.porcentaje_curso%TYPE,
+    p_nombre                   IN examen.nombre%TYPE,
+    p_descripcion              IN examen.descripcion%TYPE,
+    p_porcentaje_aprobatorio   IN examen.porcentaje_aprobatorio%TYPE,
+    p_fecha_inicio_str         IN VARCHAR2,
+    p_fecha_fin_str            IN VARCHAR2,
+    p_num_preguntas_aleatorias IN examen.num_preguntas_aleatorias%TYPE,
+    p_id_tema                  IN examen.id_tema%TYPE,
+    p_id_docente               IN examen.id_docente%TYPE,
+    p_id_grupo                 IN examen.id_grupo%TYPE,
+    -- Parámetros de balanceo (IN)
+    p_pct_facil                IN NUMBER,
+    p_pct_media                IN NUMBER,
+    p_pct_dificil              IN NUMBER,
+    p_modo                     IN VARCHAR2, -- Ahora espera 'AUTO', 'MIXTO', o 'MANUAL'
+    -- Mensajes de salida (OUT)
+    p_mensaje                  OUT VARCHAR2,
+    p_error                    OUT VARCHAR2
+) AS
+    v_new_id                   examen.id_examen%TYPE;
+    v_total_insertadas         INTEGER;
+    v_sin_porcentaje           INTEGER;
+    v_count                    INTEGER;
+    v_fecha_inicio_dt          DATE;
+    v_fecha_fin_dt             DATE;
+    v_formato_fecha            CONSTANT VARCHAR2(30) := 'YYYY-MM-DD HH24:MI:SS';
+BEGIN
+    p_error := NULL;
+    p_mensaje := NULL;
+
+BEGIN
+        v_fecha_inicio_dt := TO_DATE(p_fecha_inicio_str, v_formato_fecha);
+        v_fecha_fin_dt    := TO_DATE(p_fecha_fin_str, v_formato_fecha);
+EXCEPTION
+        WHEN OTHERS THEN
+            p_error := 'Error PL/SQL: Formato de fecha inválido para inicio o fin. Se esperaba ''' || v_formato_fecha || '''. Recibido inicio: [' || p_fecha_inicio_str || '], fin: [' || p_fecha_fin_str || ']. Detalle Oracle: ' || SQLERRM;
+            DBMS_OUTPUT.PUT_LINE(p_error);
+            RETURN;
+END;
+
+    IF v_fecha_inicio_dt < TRUNC(SYSDATE) OR v_fecha_fin_dt < v_fecha_inicio_dt THEN
+        p_error := 'Error PL/SQL: Fechas inválidas. Inicio: ' || TO_CHAR(v_fecha_inicio_dt, v_formato_fecha) ||
+                   ', Fin: ' || TO_CHAR(v_fecha_fin_dt, v_formato_fecha) ||
+                   '. El inicio debe ser >= hoy y fin >= inicio.';
+        DBMS_OUTPUT.PUT_LINE(p_error);
+        RETURN;
+END IF;
+
+SELECT COUNT(*) INTO v_count
+FROM grupo
+WHERE id_grupo   = p_id_grupo
+  AND id_docente = p_id_docente;
+
+IF v_count = 0 THEN
+        p_error := 'Error PL/SQL: El docente ' || p_id_docente || ' no está asignado al grupo ' || p_id_grupo;
+        DBMS_OUTPUT.PUT_LINE(p_error);
+        RETURN;
+END IF;
+
+INSERT INTO examen(
+    id_examen,
+    tiempo_max, numero_preguntas, porcentaje_curso,
+    nombre, descripcion, porcentaje_aprobatorio,
+    fecha_hora_inicio, fecha_hora_fin,
+    num_preguntas_aleatorias,
+    id_tema, id_docente, id_grupo, estado
+) VALUES (
+             examen_seq.NEXTVAL,
+             p_tiempo_max, p_numero_preguntas, p_porcentaje_curso,
+             p_nombre, p_descripcion, p_porcentaje_aprobatorio,
+             v_fecha_inicio_dt, v_fecha_fin_dt,
+             p_num_preguntas_aleatorias,
+             p_id_tema, p_id_docente, p_id_grupo, 'ACTIVO'
+         )
+    RETURNING id_examen INTO v_new_id;
+
+-- CORRECCIÓN AQUÍ: Reconocer 'AUTO' como modo automático
+IF UPPER(p_modo) IN ('AUTO','MIXTO') THEN -- Cambiado 'A' de nuevo a 'AUTO'
+        IF UPPER(p_modo) = 'MIXTO' THEN
+            IF p_pct_dificil > 50 THEN
+                 p_error := 'Error PL/SQL: Modo MIXTO no permite más de 50% preguntas difíciles.';
+                 DBMS_OUTPUT.PUT_LINE(p_error);
+                 RETURN;
+END IF;
+END IF;
+
+        asignar_preguntas(
+            p_id_examen   => v_new_id,
+            p_total       => p_numero_preguntas,
+            p_pct_facil   => p_pct_facil,
+            p_pct_media   => p_pct_media,
+            p_pct_dificil => p_pct_dificil
+        );
+END IF;
+
+SELECT COUNT(*) INTO v_total_insertadas
+FROM pregunta_examen
+WHERE id_examen = v_new_id;
+
+IF v_total_insertadas != p_numero_preguntas AND UPPER(p_modo) != 'MANUAL' THEN
+        p_error := 'Error PL/SQL: Total preguntas asignadas ('||v_total_insertadas||') es diferente del esperado ('||p_numero_preguntas||') para el modo ' || p_modo;
+        DBMS_OUTPUT.PUT_LINE(p_error);
+        RETURN;
+END IF;
+
+SELECT COUNT(*) INTO v_sin_porcentaje
+FROM pregunta_examen
+WHERE id_examen = v_new_id
+  AND porcentaje_examen IS NULL;
+
+IF v_sin_porcentaje > 0 AND UPPER(p_modo) != 'MANUAL' THEN
+        p_error := 'Error PL/SQL: Hay '||v_sin_porcentaje||' preguntas asignadas sin porcentaje definido para el modo ' || p_modo;
+        DBMS_OUTPUT.PUT_LINE(p_error);
+        RETURN;
+END IF;
+
+    p_mensaje := 'Examen '||v_new_id||' creado exitosamente en modo '||p_modo;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        IF p_error IS NULL THEN
+            p_error   := 'Error PL/SQL (EXCEPTION): '||SUBSTR(SQLERRM, 1, 250);
+END IF;
+        p_mensaje := NULL;
+        DBMS_OUTPUT.PUT_LINE('Excepción en crear_examen: ' || SQLCODE || ' - ' || SQLERRM);
+END crear_examen;
+/
+
+
+
     -- 5) Validar total de preguntas insertadas
 
 SELECT COUNT(*) INTO v_total_insertadas
@@ -762,71 +896,126 @@ END actualizar_examen;
 
 
 -- 2) ASIGNAR_PREGUNTAS en base a dificultad y tu tabla PREGUNTA_EXAMEN
-CREATE OR REPLACE PROCEDURE asignar_preguntas(
+create or replace NONEDITIONABLE PROCEDURE asignar_preguntas(
     p_id_examen   IN NUMBER,
     p_total       IN NUMBER,
     p_pct_facil   IN NUMBER,
     p_pct_media   IN NUMBER,
     p_pct_dificil IN NUMBER
 ) AS
-    n_facil   PLS_INTEGER;
-    n_media   PLS_INTEGER;
-    n_dificil PLS_INTEGER;
-    v_pct     NUMBER := ROUND(100/p_total,2);
+    n_facil          PLS_INTEGER;
+    n_media          PLS_INTEGER;
+    n_dificil        PLS_INTEGER;
+    v_id_tema_examen pregunta.id_tema%TYPE;
+    v_pct_pregunta   NUMBER;
+    v_preguntas_calculadas PLS_INTEGER;
+    v_preguntas_restantes PLS_INTEGER;
+    v_candidate_count PLS_INTEGER; -- Para depuración
 BEGIN
-    -- Calcula cuántas preguntas de cada nivel
-    n_facil   := ROUND(p_total * p_pct_facil/100);
-    n_media   := ROUND(p_total * p_pct_media/100);
-    n_dificil := p_total - n_facil - n_media;
+    -- 0. Validar p_total
+    IF p_total <= 0 THEN
+        DBMS_OUTPUT.PUT_LINE('asignar_preguntas: p_total debe ser mayor que 0.');
+        RETURN;
+END IF;
+    v_pct_pregunta := ROUND(100 / p_total, 2);
 
-    -- Fácil
-INSERT INTO pregunta_examen(
-    porcentaje_examen,
-    tiempo_pregunta,
-    tiene_tiempo_maximo,
-    id_pregunta,
-    id_examen,
-    origen
-)
-SELECT
-    v_pct,
-    NULL,
-    'N',
-    p.id_pregunta,
-    p_id_examen,
-    'AUTO'
-FROM pregunta p
-WHERE p.id_tema = (SELECT id_tema FROM examen WHERE id_examen = p_id_examen)
-  AND p.dificultad = 'F'
-  AND ROWNUM <= n_facil;
+    -- 1. Obtener el id_tema del examen
+BEGIN
+SELECT id_tema INTO v_id_tema_examen
+FROM examen
+WHERE id_examen = p_id_examen;
+EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            DBMS_OUTPUT.PUT_LINE('asignar_preguntas: No se encontró el examen con ID: ' || p_id_examen);
+            RETURN;
+END;
+    DBMS_OUTPUT.PUT_LINE('asignar_preguntas: Para examen ID ' || p_id_examen || ', tema ID ' || v_id_tema_examen || ', p_total=' || p_total);
 
--- Media
-INSERT INTO pregunta_examen(
-    porcentaje_examen, tiempo_pregunta, tiene_tiempo_maximo,
-    id_pregunta, id_examen, origen
-)
-SELECT
-    v_pct, NULL, 'N',
-    p.id_pregunta, p_id_examen, 'AUTO'
-FROM pregunta p
-WHERE p.id_tema = (SELECT id_tema FROM examen WHERE id_examen = p_id_examen)
-  AND p.dificultad = 'M'
-  AND ROWNUM <= n_media;
+    -- 2. Calcula cuántas preguntas de cada nivel
+    n_facil   := FLOOR(p_total * p_pct_facil / 100);
+    n_media   := FLOOR(p_total * p_pct_media / 100);
+    n_dificil := FLOOR(p_total * p_pct_dificil / 100);
+    v_preguntas_calculadas := n_facil + n_media + n_dificil;
+    v_preguntas_restantes := p_total - v_preguntas_calculadas;
 
--- Difícil
-INSERT INTO pregunta_examen(
-    porcentaje_examen, tiempo_pregunta, tiene_tiempo_maximo,
-    id_pregunta, id_examen, origen
-)
-SELECT
-    v_pct, NULL, 'N',
-    p.id_pregunta, p_id_examen, 'AUTO'
-FROM pregunta p
-WHERE p.id_tema = (SELECT id_tema FROM examen WHERE id_examen = p_id_examen)
-  AND p.dificultad = 'D'
-  AND ROWNUM <= n_dificil;
+    IF v_preguntas_restantes > 0 AND p_pct_media > 0 THEN
+        n_media := n_media + LEAST(v_preguntas_restantes, 1);
+        v_preguntas_restantes := v_preguntas_restantes - LEAST(v_preguntas_restantes, 1);
+END IF;
+    IF v_preguntas_restantes > 0 AND p_pct_facil > 0 THEN
+        n_facil := n_facil + LEAST(v_preguntas_restantes, 1);
+        v_preguntas_restantes := v_preguntas_restantes - LEAST(v_preguntas_restantes, 1);
+END IF;
+    IF v_preguntas_restantes > 0 AND p_pct_dificil > 0 THEN
+        n_dificil := n_dificil + v_preguntas_restantes;
+    ELSIF v_preguntas_restantes > 0 THEN
+        IF p_pct_media > 0 THEN n_media := n_media + v_preguntas_restantes;
+        ELSIF p_pct_facil > 0 THEN n_facil := n_facil + v_preguntas_restantes;
+ELSE n_media := n_media + v_preguntas_restantes;
+END IF;
+END IF;
+    DBMS_OUTPUT.PUT_LINE('asignar_preguntas: Calculado -> n_facil=' || n_facil || ', n_media=' || n_media || ', n_dificil=' || n_dificil);
+
+    -- 3. Insertar preguntas FÁCILES
+    IF n_facil > 0 THEN
+        DBMS_OUTPUT.PUT_LINE('Intentando insertar ' || n_facil || ' preguntas FÁCILES para tema ' || v_id_tema_examen);
+SELECT COUNT(*) INTO v_candidate_count FROM pregunta p WHERE p.id_tema = v_id_tema_examen AND p.dificultad = 'Facil' AND p.estado = 'ACTIVA' AND p.id_pregunta NOT IN (SELECT pe_existente.id_pregunta FROM pregunta_examen pe_existente WHERE pe_existente.id_examen = p_id_examen);
+DBMS_OUTPUT.PUT_LINE('Candidatas FÁCILES encontradas: ' || v_candidate_count);
+
+INSERT INTO pregunta_examen(porcentaje_examen, tiempo_pregunta, tiene_tiempo_maximo, id_pregunta, id_examen, origen)
+SELECT v_pct_pregunta, NULL, 'N', p_random.id_pregunta, p_id_examen, 'A'
+FROM (
+         SELECT p.id_pregunta
+         FROM pregunta p
+         WHERE p.id_tema = v_id_tema_examen AND p.dificultad = 'Facil' AND p.estado = 'ACTIVA' AND p.id_pregunta NOT IN (SELECT pe_existente.id_pregunta FROM pregunta_examen pe_existente WHERE pe_existente.id_examen = p_id_examen)
+         ORDER BY DBMS_RANDOM.VALUE
+     ) p_random
+WHERE ROWNUM <= n_facil;
+DBMS_OUTPUT.PUT_LINE('asignar_preguntas: Insertadas ' || SQL%ROWCOUNT || ' preguntas FÁCILES.');
+END IF;
+
+    -- 4. Insertar preguntas MEDIAS
+    IF n_media > 0 THEN
+        DBMS_OUTPUT.PUT_LINE('Intentando insertar ' || n_media || ' preguntas MEDIAS para tema ' || v_id_tema_examen);
+SELECT COUNT(*) INTO v_candidate_count FROM pregunta p WHERE p.id_tema = v_id_tema_examen AND p.dificultad = 'Media' AND p.estado = 'ACTIVA' AND p.id_pregunta NOT IN (SELECT pe_existente.id_pregunta FROM pregunta_examen pe_existente WHERE pe_existente.id_examen = p_id_examen);
+DBMS_OUTPUT.PUT_LINE('Candidatas MEDIAS encontradas: ' || v_candidate_count);
+
+INSERT INTO pregunta_examen(porcentaje_examen, tiempo_pregunta, tiene_tiempo_maximo, id_pregunta, id_examen, origen)
+SELECT v_pct_pregunta, NULL, 'N', p_random.id_pregunta, p_id_examen, 'A'
+FROM (
+         SELECT p.id_pregunta
+         FROM pregunta p
+         WHERE p.id_tema = v_id_tema_examen AND p.dificultad = 'Media' AND p.estado = 'ACTIVA' AND p.id_pregunta NOT IN (SELECT pe_existente.id_pregunta FROM pregunta_examen pe_existente WHERE pe_existente.id_examen = p_id_examen)
+         ORDER BY DBMS_RANDOM.VALUE
+     ) p_random
+WHERE ROWNUM <= n_media;
+DBMS_OUTPUT.PUT_LINE('asignar_preguntas: Insertadas ' || SQL%ROWCOUNT || ' preguntas MEDIAS.');
+END IF;
+
+    -- 5. Insertar preguntas DIFÍCILES
+    IF n_dificil > 0 THEN
+        DBMS_OUTPUT.PUT_LINE('Intentando insertar ' || n_dificil || ' preguntas DIFÍCILES para tema ' || v_id_tema_examen);
+SELECT COUNT(*) INTO v_candidate_count FROM pregunta p WHERE p.id_tema = v_id_tema_examen AND p.dificultad = 'Dificil' AND p.estado = 'ACTIVA' AND p.id_pregunta NOT IN (SELECT pe_existente.id_pregunta FROM pregunta_examen pe_existente WHERE pe_existente.id_examen = p_id_examen);
+DBMS_OUTPUT.PUT_LINE('Candidatas DIFÍCILES encontradas: ' || v_candidate_count);
+
+INSERT INTO pregunta_examen(porcentaje_examen, tiempo_pregunta, tiene_tiempo_maximo, id_pregunta, id_examen, origen)
+SELECT v_pct_pregunta, NULL, 'N', p_random.id_pregunta, p_id_examen, 'A'
+FROM (
+         SELECT p.id_pregunta
+         FROM pregunta p
+         WHERE p.id_tema = v_id_tema_examen AND p.dificultad = 'Dificil' AND p.estado = 'ACTIVA' AND p.id_pregunta NOT IN (SELECT pe_existente.id_pregunta FROM pregunta_examen pe_existente WHERE pe_existente.id_examen = p_id_examen)
+         ORDER BY DBMS_RANDOM.VALUE
+     ) p_random
+WHERE ROWNUM <= n_dificil;
+DBMS_OUTPUT.PUT_LINE('asignar_preguntas: Insertadas ' || SQL%ROWCOUNT || ' preguntas DIFÍCILES.');
+END IF;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error en asignar_preguntas: ' || SQLCODE || ' - ' || SQLERRM);
+        RAISE;
 END asignar_preguntas;
-/
+
 
 
 -- 2) ACTUALIZAR_PREGUNTA con restricción si ya fue presentada
