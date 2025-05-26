@@ -13,7 +13,7 @@ public interface DocenteService {
 
     String crearExamen (CrearExamenDTO examenDTO) throws ParseException;
 
-    String crearPregunta (String enunciado, Character es_publica, String tipoPregunta,
+    String crearPregunta (String enunciado, Character es_publica, String tipo_pregunta,
                           Integer id_tema, Integer id_docente);
 
 

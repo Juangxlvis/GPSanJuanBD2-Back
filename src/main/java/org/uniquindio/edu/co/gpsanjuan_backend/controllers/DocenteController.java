@@ -35,9 +35,9 @@ public class DocenteController {
     }
 
     @PostMapping("/crearPregunta")
-    public ResponseEntity<MensajeDTO<String>> crearPregunta(@RequestBody String enunciado, Character es_publica, String tipoPregunta,
-                                                            Integer id_tema, Integer id_docente) {
-        return ResponseEntity.ok().body(new MensajeDTO<>(false, "", docenteService.crearPregunta(enunciado,es_publica,tipoPregunta,id_tema,id_docente)));
+    public ResponseEntity<MensajeDTO<String>> crearPregunta(@RequestBody PreguntaDTO pregunta) {
+
+        return ResponseEntity.ok().body(new MensajeDTO<>(false, "", docenteService.crearPregunta(pregunta.enunciado(),pregunta.es_publica(), pregunta.tipo_pregunta(), pregunta.id_docente(), pregunta.id_tema())));
     }
 
     @PostMapping("/calificarExamen")

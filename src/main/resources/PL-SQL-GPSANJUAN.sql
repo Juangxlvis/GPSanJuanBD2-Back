@@ -352,6 +352,7 @@ END calificar_pregunta;
 /
 
 
+
 CREATE OR REPLACE PROCEDURE crear_pregunta (
     v_enunciado       IN pregunta.enunciado%TYPE,
     v_es_publica      IN pregunta.es_publica%TYPE,
@@ -362,11 +363,11 @@ CREATE OR REPLACE PROCEDURE crear_pregunta (
 )
 IS
 BEGIN
-    INSERT INTO pregunta (enunciado, es_publica, tipo_pregunta, id_tema, id_docente, estado)
-    VALUES (v_enunciado, v_es_publica, v_tipo_pregunta, v_id_tema, v_id_docente, 'creada');
-    v_mensaje := 'Pregunta creada exitosamente';
+INSERT INTO pregunta (id_pregunta, enunciado, es_publica, tipo_pregunta, id_tema, id_docente, estado)
+VALUES (PREGUNTA_SEQ.NEXTVAL, v_enunciado, v_es_publica, v_tipo_pregunta, v_id_tema, v_id_docente, 'creada');
+v_mensaje := 'Pregunta creada exitosamente';
 
-    EXCEPTION
+EXCEPTION
      WHEN OTHERS THEN
             v_mensaje := 'Error al crear la pregunta: ' || SQLERRM;
 

@@ -145,7 +145,10 @@ public class DocenteServiceImp implements DocenteService {
 
     @Override
     @Transactional
-    public String crearPregunta(String enunciado, Character esPublica, String tipoPregunta, Integer idTema, Integer idDocente) {
+    public String crearPregunta(String enunciado, Character esPublica, String tipo_pregunta, Integer idTema, Integer idDocente) {
+
+        System.out.println(enunciado);
+        System.out.println(tipo_pregunta);
         // Crear una consulta para el procedimiento almacenado
         StoredProcedureQuery storedProcedure = entityManager.createStoredProcedureQuery("crear_pregunta");
 
@@ -153,16 +156,17 @@ public class DocenteServiceImp implements DocenteService {
         storedProcedure.registerStoredProcedureParameter("v_enunciado", String.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_es_publica", Character.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_tipo_pregunta", String.class, ParameterMode.IN);
-        storedProcedure.registerStoredProcedureParameter("v_id_tema", Integer.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_id_docente", Integer.class, ParameterMode.IN);
+        storedProcedure.registerStoredProcedureParameter("v_id_tema", Integer.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_mensaje", String.class, ParameterMode.OUT);
 
         // Establecer los valores de los parámetros de entrada
         storedProcedure.setParameter("v_enunciado", enunciado);
         storedProcedure.setParameter("v_es_publica", esPublica);
-        storedProcedure.setParameter("v_tipo_pregunta", tipoPregunta);
-        storedProcedure.setParameter("v_id_tema", idTema);
+        storedProcedure.setParameter("v_tipo_pregunta", tipo_pregunta);
         storedProcedure.setParameter("v_id_docente", idDocente);
+        storedProcedure.setParameter("v_id_tema", idTema);
+
 
         // Ejecutar el procedimiento almacenado
         storedProcedure.execute();
