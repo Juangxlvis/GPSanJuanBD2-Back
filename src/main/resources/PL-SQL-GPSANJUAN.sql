@@ -373,7 +373,7 @@ BEGIN
     INTO res
     FROM pregunta p
     WHERE p.id_tema = p_id_tema
-      AND p.estado = 'Activa';
+      AND p.estado = 'ACTIVA';
 END get_banco_preguntas;
 /
 
@@ -1305,3 +1305,5 @@ EXCEPTION
         p_mensaje := 'Error al iniciar presentación: ' || SQLERRM;
 END iniciar_presentacion_examen;
 /
+
+--TRIGGERS

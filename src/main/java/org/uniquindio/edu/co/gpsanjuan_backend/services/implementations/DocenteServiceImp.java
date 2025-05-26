@@ -2,7 +2,6 @@ package org.uniquindio.edu.co.gpsanjuan_backend.services.implementations;
 
 
 import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.ParameterMode;
@@ -25,7 +24,7 @@ import java.lang.reflect.Type;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.ParseException;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -259,7 +258,7 @@ public class DocenteServiceImp implements DocenteService {
 
         // Establecer los valores de los parámetros de entrada
         storedProcedure.setParameter("p_id_usuario", id);
-        storedProcedure.setParameter("rol", "docente");
+        storedProcedure.setParameter("rol", "alumno");
 
         // Ejecutar el procedimiento almacenado
         storedProcedure.execute();
@@ -282,28 +281,17 @@ public class DocenteServiceImp implements DocenteService {
 
         // Establecer los valores de los parámetros de entrada
         storedProcedure.setParameter("p_id_usuario", id);
-        storedProcedure.setParameter("rol", rol);
+        storedProcedure.setParameter("rol", "alumno");
 
         // Ejecutar el procedimiento almacenado
         storedProcedure.execute();
 
         String json1 = (String) storedProcedure.getOutputParameterValue("res");
-        System.out.println("JSON from DB for get_grupos_por_usuario (ID " + id + ", Rol " + rol + "): |" + json1 + "|");
-        if (json1 == null || json1.trim().isEmpty() || json1.equalsIgnoreCase("null")) { // Handle "null" string too
-            System.out.println("No JSON data returned from DB, returning empty list.");
-            return new ArrayList<>();
-        }
+
         Gson gson = new Gson();
         Type personListType = new TypeToken<List<CursoDTO>>() {}.getType();
 
-        try {
-            return gson.fromJson(json1, personListType);
-        } catch (JsonSyntaxException e) {
-            System.err.println("RAW JSON causing error: |" + json1 + "|"); // Log it again on error
-            System.err.println("Error parsing JSON with Gson: ");
-            e.printStackTrace();
-            return new ArrayList<>();
-        }
+        return gson.fromJson(json1, personListType);
     }
 
 
@@ -329,6 +317,7 @@ public class DocenteServiceImp implements DocenteService {
         return gson.fromJson(json1, personListType);
     }
 
+
     @Override
     public List<TemasCursoDTO> obtenerTemasDocente() {
         List<Object[]> resultados = examenRepository.obtenerCursos();
@@ -348,5 +337,44 @@ public class DocenteServiceImp implements DocenteService {
                 rs.getInt("id_tema"),
                 rs.getInt("id_docente")
         );
+    }
+
+    @Override
+    public List<GrupoDTO> obtenerGruposPorCurso(Integer idCurso) {
+        // Crear una consulta para el procedimiento almacenado
+        StoredProcedureQuery storedProcedure = entityManager.createStoredProcedureQuery("get_grupos_por_curso");
+
+        // Registrar los parámetros de entrada y salida del procedimiento almacenado
+        storedProcedure.registerStoredProcedureParameter("p_id_curso", Integer.class, ParameterMode.IN);
+        storedProcedure.registerStoredProcedureParameter("res", String.class, ParameterMode.OUT); // CLOB se mapea a String
+
+        // Establecer los valores de los parámetros de entrada
+        storedProcedure.setParameter("p_id_curso", idCurso);
+
+        try {
+            // Ejecutar el procedimiento almacenado
+            storedProcedure.execute();
+
+            // Obtener el resultado (JSON como String)
+            String jsonResult = (String) storedProcedure.getOutputParameterValue("res");
+
+            // Verificar si el resultado es nulo o indicativo de error desde PL/SQL
+            if (jsonResult == null || jsonResult.trim().isEmpty() || jsonResult.toLowerCase().contains("error")) {
+                // Puedes lanzar una excepción personalizada o loggear el error
+                System.err.println("Error desde PL/SQL o resultado vacío: " + jsonResult);
+                return Collections.emptyList(); // Devolver lista vacía o manejar el error como prefieras
+            }
+
+            // Deserializar el JSON a una lista de GrupoDTO
+            Gson gson = new Gson();
+            Type grupoListType = new TypeToken<List<GrupoDTO>>() {}.getType();
+
+            return gson.fromJson(jsonResult, grupoListType);
+
+        } catch (Exception e) {
+            // Manejo de excepciones (e.g., loggear el error, lanzar una excepción personalizada)
+            e.printStackTrace(); // Considera un logging más robusto
+            return Collections.emptyList(); // O lanzar una excepción
+        }
     }
 }

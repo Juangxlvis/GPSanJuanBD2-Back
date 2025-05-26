@@ -70,6 +70,21 @@ public class DocenteController {
         return ResponseEntity.ok().body(new MensajeDTO<>(false, "", docenteService.obtenerTemasCurso(id_curso)));
     }
 
+    @GetMapping("/{id_curso}/grupos") // Endpoint para obtener grupos por ID de curso
+    public ResponseEntity<MensajeDTO<List<GrupoDTO>>> obtenerGruposPorCurso(@PathVariable("id_curso") Integer idCurso) {
+        try {
+            List<GrupoDTO> grupos = docenteService.obtenerGruposPorCurso(idCurso);
+            if (grupos.isEmpty()) {
+                // Puedes devolver un mensaje específico si no se encuentran grupos o simplemente una lista vacía
+                return ResponseEntity.ok().body(new MensajeDTO<>(false, "No se encontraron grupos para el curso especificado.", grupos));
+            }
+            return ResponseEntity.ok().body(new MensajeDTO<>(false, "", grupos));
+        } catch (Exception e) {
+            // Manejo de errores generales, puedes ser más específico
+            return ResponseEntity.internalServerError().body(new MensajeDTO<>(true, "Error al obtener los grupos del curso: " + e.getMessage(), null));
+        }
+    }
+
     @GetMapping("/allTemas")
     public ResponseEntity<MensajeDTO<List<TemasCursoDTO>>> obtenerTemasDocente() {
         return ResponseEntity.ok().body(new MensajeDTO<>(false, "", docenteService.obtenerTemasDocente()));
