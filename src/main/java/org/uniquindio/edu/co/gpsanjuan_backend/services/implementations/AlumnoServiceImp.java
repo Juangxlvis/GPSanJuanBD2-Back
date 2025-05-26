@@ -8,10 +8,7 @@ import jakarta.persistence.StoredProcedureQuery;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.uniquindio.edu.co.gpsanjuan_backend.DTO.CursoDTO;
-import org.uniquindio.edu.co.gpsanjuan_backend.DTO.ExamenHechoDTO;
-import org.uniquindio.edu.co.gpsanjuan_backend.DTO.ExamenPendienteDTO;
-import org.uniquindio.edu.co.gpsanjuan_backend.DTO.PreguntaDTO;
+import org.uniquindio.edu.co.gpsanjuan_backend.DTO.*;
 import org.uniquindio.edu.co.gpsanjuan_backend.services.interfaces.AlumnoService;
 
 import java.lang.reflect.Type;
@@ -131,9 +128,9 @@ public class AlumnoServiceImp implements AlumnoService {
     }
 
     @Override
-    public List<CursoDTO> obtenerCursos(String id, String rol) {
+    public List<CursoSimpleDTO> obtenerCursos(String id, String rol) {
         // Crear una consulta para el procedimiento almacenado
-        StoredProcedureQuery storedProcedure = entityManager.createStoredProcedureQuery("get_grupos_por_usuario");
+        StoredProcedureQuery storedProcedure = entityManager.createStoredProcedureQuery("get_cursos_usuario");
 
         // Registrar los parámetros de entrada y salida del procedimiento almacenado
         storedProcedure.registerStoredProcedureParameter("p_id_usuario", String.class, ParameterMode.IN);
@@ -150,7 +147,7 @@ public class AlumnoServiceImp implements AlumnoService {
         String json1 = (String) storedProcedure.getOutputParameterValue("res");
 
         Gson gson = new Gson();
-        Type personListType = new TypeToken<List<CursoDTO>>() {}.getType();
+        Type personListType = new TypeToken<List<CursoSimpleDTO>>() {}.getType();
 
         return gson.fromJson(json1, personListType);
     }

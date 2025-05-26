@@ -118,6 +118,65 @@ EXCEPTION
         res := JSON_OBJECT('error' VALUE ('Error en el procedimiento almacenado: ' || SQLERRM) FORMAT JSON);
 END get_grupos_por_usuario;
 
+CREATE OR REPLACE PROCEDURE get_grupos_por_curso (
+    p_id_curso   IN NUMBER,
+    p_id_docente IN NUMBER, -- Parámetro para el ID del docente
+    res          OUT CLOB
+) AS
+BEGIN
+    -- Seleccionar y agregar los grupos como un array JSON
+SELECT
+    JSON_ARRAYAGG( -- Agrega los JSON_OBJECT resultantes en un array JSON
+            JSON_OBJECT( -- Crea un objeto JSON para cada fila del grupo
+                    'id_grupo'     VALUE g.id_grupo, -- Solo ID del grupo
+                    'nombre_grupo' VALUE g.nombre    -- Solo nombre del grupo
+            ) RETURNING CLOB -- Asegura que cada JSON_OBJECT se trate como CLOB
+    )
+INTO res -- Almacena el resultado directamente en el parámetro de salida
+FROM
+    Grupo g -- Nombre de tu tabla de grupos (asegúrate que sea el correcto)
+WHERE
+    g.id_curso   = p_id_curso AND -- Condición para filtrar por curso
+    g.id_docente = p_id_docente;  -- Condición para filtrar por docente
+
+-- JSON_ARRAYAGG devuelve '[]' (un array JSON vacío, no SQL NULL) si no hay filas.
+-- Esta comprobación es una salvaguarda por si 'res' quedara NULL en algún caso extremo.
+IF res IS NULL THEN
+        res := TO_CLOB('[]'); -- Asigna un array JSON vacío como CLOB
+END IF;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        DECLARE
+l_error_message VARCHAR2(3000);
+            l_json_error_string VARCHAR2(3200);
+            l_sqlerrm_text VARCHAR2(2800);
+BEGIN
+            -- Escapar caracteres especiales en SQLERRM para que sea un JSON válido
+            l_sqlerrm_text := SUBSTR(SQLERRM, 1, 2800);
+            l_sqlerrm_text := REPLACE(l_sqlerrm_text, '\', '\\');
+            l_sqlerrm_text := REPLACE(l_sqlerrm_text, '"', '\"');
+            l_sqlerrm_text := REPLACE(l_sqlerrm_text, chr(10), '\n');
+            l_sqlerrm_text := REPLACE(l_sqlerrm_text, chr(13), '\r');
+            l_sqlerrm_text := REPLACE(l_sqlerrm_text, chr(9), '\t');
+
+            l_error_message := 'Error en el procedimiento almacenado: ' || l_sqlerrm_text;
+
+            DBMS_OUTPUT.PUT_LINE('Error en get_grupos_por_curso (raw SQLERRM): ' || SUBSTR(SQLERRM, 1, 500));
+
+            l_json_error_string := '{"error":"' || l_error_message || '"}';
+
+BEGIN
+                res := TO_CLOB(l_json_error_string);
+EXCEPTION
+                WHEN VALUE_ERROR THEN
+                    res := TO_CLOB('{"error":"Mensaje de error demasiado largo o inválido para conversión JSON."}');
+WHEN OTHERS THEN
+                    res := TO_CLOB('{"error":"Fallback: Error inesperado creando JSON de error."}');
+END;
+END;
+END get_grupos_por_curso;
+/
 
 -- obtenerExamenesPresentadosAlumnoGrupo()
 -- @descripción: Se encarga de obtener la presentacion_examen de un alumno específico en un grupo específico
@@ -842,6 +901,86 @@ v_mensaje := 'Error al eliminar usuario: ' || SQLERRM;
 END eliminar_usuario;
 /
 
+CREATE OR REPLACE PROCEDURE get_cursos_usuario (
+    p_id_usuario IN VARCHAR2,
+    rol_in       IN VARCHAR2,
+    res          OUT CLOB
+) AS
+    v_json_result CLOB;
+BEGIN
+    IF LOWER(rol_in) = 'docente' THEN
+SELECT
+    COALESCE(
+            JSON_ARRAYAGG(
+                    JSON_OBJECT(
+                            'id_curso'     VALUE id_curso,
+                            'nombre_curso' VALUE nombre_curso
+                        -- No need for FORMAT JSON on simple string values if Oracle version is recent
+                    ) RETURNING CLOB
+            ),
+            JSON_ARRAY() RETURNING CLOB -- Return empty array if no courses found
+    )
+INTO v_json_result
+FROM (
+         SELECT DISTINCT
+             c.id_curso   AS id_curso,
+             c.nombre     AS nombre_curso
+         FROM
+             docente d
+                 JOIN
+             grupo g ON d.id_docente = g.id_docente
+                 JOIN
+             curso c ON g.id_curso = c.id_curso
+         WHERE
+             d.id_docente = p_id_usuario
+     );
+ELSIF LOWER(rol_in) = 'alumno' THEN
+SELECT
+    COALESCE(
+            JSON_ARRAYAGG(
+                    JSON_OBJECT(
+                            'id_curso'     VALUE id_curso,
+                            'nombre_curso' VALUE nombre_curso
+                    ) RETURNING CLOB
+            ),
+            JSON_ARRAY() RETURNING CLOB -- Return empty array if no courses found
+    )
+INTO v_json_result
+FROM (
+         SELECT DISTINCT
+             c.id_curso   AS id_curso,
+             c.nombre     AS nombre_curso
+         FROM
+             alumno_grupo ag
+                 JOIN
+             grupo g ON ag.id_grupo = g.id_grupo
+                 JOIN
+             curso c ON g.id_curso = c.id_curso
+         WHERE
+             ag.id_alumno = p_id_usuario
+     );
+ELSE
+        -- If rol is not 'docente' or 'alumno', return an empty JSON array
+        v_json_result := JSON_ARRAY() RETURNING CLOB;
+END IF;
+
+    res := v_json_result;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error in get_cursos_usuario: ' || SQLERRM);
+        -- Return a valid JSON error object, ensuring it's CLOB
+        DECLARE
+l_error_msg VARCHAR2(500);
+BEGIN
+            l_error_msg := 'Error en el procedimiento almacenado: ' || SUBSTR(SQLERRM, 1, 400);
+            res := JSON_OBJECT('error' VALUE l_error_msg RETURNING CLOB);
+EXCEPTION
+          WHEN OTHERS THEN -- Fallback if error JSON creation fails
+            res := TO_CLOB('{"error":"Error anidado en el manejador de excepciones."}');
+END;
+END get_cursos_usuario;
+/
 
 CREATE OR REPLACE PROCEDURE get_calificaciones_alumno(
     p_id_alumno IN NUMBER,

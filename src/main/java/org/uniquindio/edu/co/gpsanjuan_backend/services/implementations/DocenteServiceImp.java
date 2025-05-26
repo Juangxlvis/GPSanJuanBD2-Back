@@ -272,9 +272,9 @@ public class DocenteServiceImp implements DocenteService {
     }
 
     @Override
-    public List<CursoDTO> obtenerCursos(String id, String rol) {
+    public List<CursoSimpleDTO> obtenerCursos(String id, String rol) {
         // Crear una consulta para el procedimiento almacenado
-        StoredProcedureQuery storedProcedure = entityManager.createStoredProcedureQuery("get_grupos_por_usuario");
+        StoredProcedureQuery storedProcedure = entityManager.createStoredProcedureQuery("get_cursos_usuario");
 
         // Registrar los parámetros de entrada y salida del procedimiento almacenado
         storedProcedure.registerStoredProcedureParameter("p_id_usuario", String.class, ParameterMode.IN);
@@ -290,13 +290,13 @@ public class DocenteServiceImp implements DocenteService {
 
         String json1 = (String) storedProcedure.getOutputParameterValue("res");
 
-        System.out.println("JSON from DB for get_grupos_por_usuario (ID " + id + ", Rol " + rol + "): |" + json1 + "|");
+        System.out.println("JSON from DB for get_cursos_por_usuario (ID " + id + ", Rol " + rol + "): |" + json1 + "|");
         if (json1 == null || json1.trim().isEmpty() || json1.equalsIgnoreCase("null")) { // Handle "null" string too
             System.out.println("No JSON data returned from DB, returning empty list.");
             return new ArrayList<>();
         }
         Gson gson = new Gson();
-        Type personListType = new TypeToken<List<CursoDTO>>() {}.getType();
+        Type personListType = new TypeToken<List<CursoSimpleDTO>>() {}.getType();
 
         try {
             return gson.fromJson(json1, personListType);
@@ -354,16 +354,18 @@ public class DocenteServiceImp implements DocenteService {
     }
 
     @Override
-    public List<GrupoDTO> obtenerGruposPorCurso(Integer idCurso) {
+    public List<GrupoSimpleDTO> obtenerGruposPorCurso(Integer idCurso, Integer idDocente) {
         // Crear una consulta para el procedimiento almacenado
         StoredProcedureQuery storedProcedure = entityManager.createStoredProcedureQuery("get_grupos_por_curso");
 
         // Registrar los parámetros de entrada y salida del procedimiento almacenado
         storedProcedure.registerStoredProcedureParameter("p_id_curso", Integer.class, ParameterMode.IN);
-        storedProcedure.registerStoredProcedureParameter("res", String.class, ParameterMode.OUT); // CLOB se mapea a String
+        storedProcedure.registerStoredProcedureParameter("p_id_docente", Integer.class, ParameterMode.IN); // Nuevo parámetro
+        storedProcedure.registerStoredProcedureParameter("res", String.class, ParameterMode.OUT);
 
         // Establecer los valores de los parámetros de entrada
         storedProcedure.setParameter("p_id_curso", idCurso);
+        storedProcedure.setParameter("p_id_docente", idDocente); // Establecer el nuevo parámetro
 
         try {
             // Ejecutar el procedimiento almacenado
@@ -374,21 +376,31 @@ public class DocenteServiceImp implements DocenteService {
 
             // Verificar si el resultado es nulo o indicativo de error desde PL/SQL
             if (jsonResult == null || jsonResult.trim().isEmpty() || jsonResult.toLowerCase().contains("error")) {
-                // Puedes lanzar una excepción personalizada o loggear el error
-                System.err.println("Error desde PL/SQL o resultado vacío: " + jsonResult);
-                return Collections.emptyList(); // Devolver lista vacía o manejar el error como prefieras
+                System.err.println("Error desde PL/SQL o resultado vacío para get_grupos_por_curso: " + jsonResult);
+                return Collections.emptyList();
             }
 
-            // Deserializar el JSON a una lista de GrupoDTO
+            // Deserializar el JSON a una lista de GrupoSimpleDTO
+            // Si GrupoSimpleDTO no tiene campos LocalDate, no necesitas el LocalDateAdapter aquí.
+            // Si otros DTOs que Gson pudiera inferir indirectamente lo necesitaran, entonces sí.
+            // Por seguridad, si tienes LocalDate en cualquier DTO que Gson pueda tocar, es mejor registrar el adapter.
+            // Para este caso específico, asumiendo que GrupoSimpleDTO es simple:
             Gson gson = new Gson();
-            Type grupoListType = new TypeToken<List<GrupoDTO>>() {}.getType();
+            // Si necesitaras LocalDateAdapter para otros DTOs que Gson pudiera encontrar:
+            // Gson gson = new GsonBuilder()
+            //                 .registerTypeAdapter(LocalDate.class, new LocalDateAdapter())
+            //                 .create();
 
-            return gson.fromJson(jsonResult, grupoListType);
+
+            Type grupoSimpleListType = new TypeToken<List<GrupoSimpleDTO>>() {}.getType();
+
+            return gson.fromJson(jsonResult, grupoSimpleListType);
 
         } catch (Exception e) {
-            // Manejo de excepciones (e.g., loggear el error, lanzar una excepción personalizada)
             e.printStackTrace(); // Considera un logging más robusto
-            return Collections.emptyList(); // O lanzar una excepción
+            // Podrías lanzar una excepción personalizada aquí para que el controlador la maneje
+            // throw new RuntimeException("Error al procesar la obtención de grupos del curso", e);
+            return Collections.emptyList();
         }
     }
 }

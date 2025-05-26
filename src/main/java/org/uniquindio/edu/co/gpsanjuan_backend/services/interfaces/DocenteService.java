@@ -25,14 +25,13 @@ public interface DocenteService {
 
     String obtenerNombre(String id, String rol);
 
-    List<CursoDTO> obtenerCursos(String id, String rol);
+    List<CursoSimpleDTO> obtenerCursos(String id, String rol);
 
     List<TemasCursoDTO> obtenerTemasCurso(Integer id_curso);
 
     List<TemasCursoDTO> obtenerTemasDocente();
 
-    List<GrupoDTO> obtenerGruposPorCurso(Integer idCurso);
-
+    List<GrupoSimpleDTO> obtenerGruposPorCurso(Integer idCurso, Integer idDocente);
 
 
 }

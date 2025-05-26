@@ -61,7 +61,7 @@ public class DocenteController {
         return ResponseEntity.ok().body(new MensajeDTO<>(false, "", docenteService.obtenerNombre(id, rol)));
     }
     @GetMapping("/cursos/{id}/{rol}")
-    public ResponseEntity<MensajeDTO<List<CursoDTO>>> obtenerCursos(@PathVariable String id, @PathVariable String rol) {
+    public ResponseEntity<MensajeDTO<List<CursoSimpleDTO>>> obtenerCursos(@PathVariable String id, @PathVariable String rol) {
         return ResponseEntity.ok().body(new MensajeDTO<>(false, "", docenteService.obtenerCursos(id, rol)));
     }
 
@@ -70,17 +70,20 @@ public class DocenteController {
         return ResponseEntity.ok().body(new MensajeDTO<>(false, "", docenteService.obtenerTemasCurso(id_curso)));
     }
 
-    @GetMapping("/{id_curso}/grupos") // Endpoint para obtener grupos por ID de curso
-    public ResponseEntity<MensajeDTO<List<GrupoDTO>>> obtenerGruposPorCurso(@PathVariable("id_curso") Integer idCurso) {
+    @GetMapping("/{id_docente}/cursos/{id_curso}/grupos")
+    public ResponseEntity<MensajeDTO<List<GrupoSimpleDTO>>> obtenerGruposPorCurso(
+            @PathVariable("id_docente") Integer idDocente,
+            @PathVariable("id_curso") Integer idCurso) {
         try {
-            List<GrupoDTO> grupos = docenteService.obtenerGruposPorCurso(idCurso);
+            List<GrupoSimpleDTO> grupos = docenteService.obtenerGruposPorCurso(idCurso, idDocente);
             if (grupos.isEmpty()) {
-                // Puedes devolver un mensaje específico si no se encuentran grupos o simplemente una lista vacía
-                return ResponseEntity.ok().body(new MensajeDTO<>(false, "No se encontraron grupos para el curso especificado.", grupos));
+                return ResponseEntity.ok().body(new MensajeDTO<>(false, "No se encontraron grupos para el docente en el curso especificado.", grupos));
             }
-            return ResponseEntity.ok().body(new MensajeDTO<>(false, "", grupos));
+            return ResponseEntity.ok().body(new MensajeDTO<>(false, "Grupos obtenidos exitosamente.", grupos));
         } catch (Exception e) {
-            // Manejo de errores generales, puedes ser más específico
+            // Loggear el error es importante aquí
+            System.err.println("Error en DocenteController al llamar a obtenerGruposPorCurso: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.internalServerError().body(new MensajeDTO<>(true, "Error al obtener los grupos del curso: " + e.getMessage(), null));
         }
     }

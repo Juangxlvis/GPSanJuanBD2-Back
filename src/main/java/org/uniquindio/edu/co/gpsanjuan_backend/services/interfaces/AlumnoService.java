@@ -19,7 +19,7 @@ public interface AlumnoService {
     String crearPresentacionExamen (Integer tiempo, Character terminado, String ip_source,
                                     LocalDate fecha_hora_presentacion, Integer id_examen, Integer id_alumno );
 
-    List<CursoDTO> obtenerCursos(String id, String rol);
+    List<CursoSimpleDTO> obtenerCursos(String id, String rol);
 
     List<ExamenPendienteDTO> obtenerExamenesPendiente(String id, Integer idGrupo);
 
