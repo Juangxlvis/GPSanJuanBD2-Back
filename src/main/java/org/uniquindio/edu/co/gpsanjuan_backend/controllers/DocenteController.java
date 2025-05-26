@@ -36,9 +36,38 @@ public class DocenteController {
     }
 
     @PostMapping("/crearPregunta")
-    public ResponseEntity<MensajeDTO<String>> crearPregunta(@RequestBody PreguntaDTO pregunta) {
+    public ResponseEntity<MensajeDTO<CrearPreguntaResponseDTO>> crearPregunta(@RequestBody PreguntaDTO datosPregunta) {
+        // Imprimir para depuración (opcional)
+        System.out.println("Controller - DTO recibido: " + datosPregunta);
+        System.out.println("Controller - Enunciado: " + datosPregunta.enunciado());
+        System.out.println("Controller - Es Pública: " + datosPregunta.es_publica());
+        System.out.println("Controller - Tipo Pregunta: " + datosPregunta.tipo_pregunta()); // Asumiendo que corregiste el nombre en PreguntaDTO
+        System.out.println("Controller - ID Tema: " + datosPregunta.id_tema());
+        System.out.println("Controller - ID Docente: " + datosPregunta.id_docente());
 
-        return ResponseEntity.ok().body(new MensajeDTO<>(false, "", docenteService.crearPregunta(pregunta.enunciado(),pregunta.es_publica(), pregunta.tipo_pregunta(), pregunta.id_docente(), pregunta.id_tema())));
+        try {
+            CrearPreguntaResponseDTO respuestaServicio = docenteService.crearPregunta(
+                    datosPregunta.enunciado(),
+                    datosPregunta.es_publica(),
+                    datosPregunta.tipo_pregunta(), // Asumiendo que PreguntaDTO tiene el campo como tipoPregunta
+                    datosPregunta.id_tema(),
+                    datosPregunta.id_docente()
+            );
+
+            // Verificar si el mensaje del servicio indica un error (basado en las validaciones de PL/SQL)
+            if (respuestaServicio.mensaje() != null && respuestaServicio.mensaje().toLowerCase().startsWith("error")) {
+                // Podrías devolver un HttpStatus.BAD_REQUEST o similar si es un error de validación
+                return ResponseEntity.badRequest().body(new MensajeDTO<>(true, respuestaServicio.mensaje(), null));
+            }
+
+            return ResponseEntity.ok().body(new MensajeDTO<>(false, "Operación procesada.", respuestaServicio));
+
+        } catch (Exception e) {
+            // Capturar excepciones que puedan venir del servicio (ej. error de BD no manejado como OUT param)
+            System.err.println("Error en DocenteController al llamar a crearPregunta: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(new MensajeDTO<>(true, "Error interno del servidor: " + e.getMessage(), null));
+        }
     }
 
     @PostMapping("/calificarExamen")

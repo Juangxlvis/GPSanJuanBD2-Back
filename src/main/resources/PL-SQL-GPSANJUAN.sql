@@ -354,25 +354,76 @@ END calificar_pregunta;
 
 
 CREATE OR REPLACE PROCEDURE crear_pregunta (
-    v_enunciado       IN pregunta.enunciado%TYPE,
-    v_es_publica      IN pregunta.es_publica%TYPE,
-    v_tipo_pregunta   IN pregunta.tipo_pregunta%TYPE,
-    v_id_tema         IN pregunta.id_tema%TYPE,
-    v_id_docente      IN pregunta.id_docente%TYPE,
-    v_mensaje         OUT VARCHAR2 -- Mover al final de la lista de parámetros y utilizar OUT
+    v_enunciado           IN pregunta.enunciado%TYPE,
+    v_es_publica          IN pregunta.es_publica%TYPE,
+    v_tipo_pregunta       IN pregunta.tipo_pregunta%TYPE,
+    v_id_tema             IN pregunta.id_tema%TYPE,
+    v_id_docente          IN pregunta.id_docente%TYPE,
+    v_id_pregunta_creada  OUT pregunta.id_pregunta%TYPE, -- Nuevo parámetro OUT para el ID
+    v_mensaje             OUT VARCHAR2
 )
 IS
 BEGIN
-INSERT INTO pregunta (id_pregunta, enunciado, es_publica, tipo_pregunta, id_tema, id_docente, estado)
-VALUES (PREGUNTA_SEQ.NEXTVAL, v_enunciado, v_es_publica, v_tipo_pregunta, v_id_tema, v_id_docente, 'creada');
-v_mensaje := 'Pregunta creada exitosamente';
+    -- Inicializar parámetros de salida
+    v_id_pregunta_creada := NULL;
+    v_mensaje := NULL;
+
+    -- Validación de parámetros NOT NULL (igual que antes)
+    IF v_enunciado IS NULL THEN
+        v_mensaje := 'Error desde PL/SQL: El valor para "enunciado" no puede ser nulo.';
+        DBMS_OUTPUT.PUT_LINE(v_mensaje);
+        RETURN;
+END IF;
+    IF v_es_publica IS NULL THEN
+        v_mensaje := 'Error desde PL/SQL: El valor para "es_publica" no puede ser nulo.';
+        DBMS_OUTPUT.PUT_LINE(v_mensaje);
+        RETURN;
+END IF;
+    IF v_tipo_pregunta IS NULL THEN
+        v_mensaje := 'Error desde PL/SQL: El valor para "tipo_pregunta" no puede ser nulo.';
+        DBMS_OUTPUT.PUT_LINE(v_mensaje);
+        RETURN;
+END IF;
+    IF v_id_tema IS NULL THEN
+        v_mensaje := 'Error desde PL/SQL: El valor para "id_tema" no puede ser nulo.';
+        DBMS_OUTPUT.PUT_LINE(v_mensaje);
+        RETURN;
+END IF;
+    IF v_id_docente IS NULL THEN
+        v_mensaje := 'Error desde PL/SQL: El valor para "id_docente" no puede ser nulo.';
+        DBMS_OUTPUT.PUT_LINE(v_mensaje);
+        RETURN;
+END IF;
+
+INSERT INTO pregunta (
+    ID_PREGUNTA,
+    enunciado,
+    es_publica,
+    tipo_pregunta,
+    id_tema,
+    id_docente,
+    estado
+) VALUES (
+             PREGUNTA_SEQ.NEXTVAL,
+             v_enunciado,
+             v_es_publica,
+             v_tipo_pregunta,
+             v_id_tema,
+             v_id_docente,
+             'ACTIVA'
+         )
+    RETURNING ID_PREGUNTA INTO v_id_pregunta_creada; -- Captura el ID generado
+
+v_mensaje := 'Pregunta creada exitosamente. ID: ' || v_id_pregunta_creada;
 
 EXCEPTION
-     WHEN OTHERS THEN
-            v_mensaje := 'Error al crear la pregunta: ' || SQLERRM;
-
+    WHEN OTHERS THEN
+        v_id_pregunta_creada := NULL; -- Asegurarse que el ID sea nulo en caso de error
+        DBMS_OUTPUT.PUT_LINE('Error en crear_pregunta (EXCEPTION): ' || SQLCODE || ' - ' || SQLERRM);
+        v_mensaje := 'Error al crear la pregunta: ' || SQLERRM;
 END crear_pregunta;
 /
+
 
 
 -- Obtener preguntas por examen

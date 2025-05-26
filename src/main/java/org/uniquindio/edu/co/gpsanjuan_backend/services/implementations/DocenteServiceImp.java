@@ -97,7 +97,7 @@ public class DocenteServiceImp implements DocenteService {
         storedProcedure.registerStoredProcedureParameter("v_porcentaje_curso", Integer.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_nombre", String.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_descripcion", String.class, ParameterMode.IN);
-        storedProcedure.registerStoredProcedureParameter("v_porcentaje_aprobatorio", Integer.class, ParameterMode.IN);
+        storedProcedure.registerStoredProcedureParameter("v_porcentaje_aprobatorio", Float.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_fecha_hora_inicio", String.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_fecha_hora_fin", String.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_num_preguntas_aleatorias", Integer.class, ParameterMode.IN);
@@ -145,37 +145,41 @@ public class DocenteServiceImp implements DocenteService {
 
     @Override
     @Transactional
-    public String crearPregunta(String enunciado, Character esPublica, String tipo_pregunta, Integer idTema, Integer idDocente) {
-
-        System.out.println(enunciado);
-        System.out.println(tipo_pregunta);
-        // Crear una consulta para el procedimiento almacenado
+    public CrearPreguntaResponseDTO crearPregunta(String enunciado, Character esPublica, String tipoPregunta, Integer idTema, Integer idDocente) {
         StoredProcedureQuery storedProcedure = entityManager.createStoredProcedureQuery("crear_pregunta");
 
-        // Registrar los parámetros de entrada y salida del procedimiento almacenado
+        // Parámetros IN
         storedProcedure.registerStoredProcedureParameter("v_enunciado", String.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_es_publica", Character.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_tipo_pregunta", String.class, ParameterMode.IN);
-        storedProcedure.registerStoredProcedureParameter("v_id_docente", Integer.class, ParameterMode.IN);
         storedProcedure.registerStoredProcedureParameter("v_id_tema", Integer.class, ParameterMode.IN);
+        storedProcedure.registerStoredProcedureParameter("v_id_docente", Integer.class, ParameterMode.IN);
+
+        // Parámetros OUT
+        storedProcedure.registerStoredProcedureParameter("v_id_pregunta_creada", Integer.class, ParameterMode.OUT); // Nuevo parámetro OUT
         storedProcedure.registerStoredProcedureParameter("v_mensaje", String.class, ParameterMode.OUT);
 
-        // Establecer los valores de los parámetros de entrada
+        // Establecer valores de parámetros IN
         storedProcedure.setParameter("v_enunciado", enunciado);
         storedProcedure.setParameter("v_es_publica", esPublica);
-        storedProcedure.setParameter("v_tipo_pregunta", tipo_pregunta);
-        storedProcedure.setParameter("v_id_docente", idDocente);
+        storedProcedure.setParameter("v_tipo_pregunta", tipoPregunta);
         storedProcedure.setParameter("v_id_tema", idTema);
+        storedProcedure.setParameter("v_id_docente", idDocente);
 
-
-        // Ejecutar el procedimiento almacenado
         storedProcedure.execute();
 
-        // Obtener el valor del parámetro de salida
+        Integer idPreguntaCreada = (Integer) storedProcedure.getOutputParameterValue("v_id_pregunta_creada");
         String mensaje = (String) storedProcedure.getOutputParameterValue("v_mensaje");
 
-        // Retornar el mensaje
-        return mensaje;
+        // Si el mensaje indica un error desde PL/SQL (porque no se lanzó una excepción SQL),
+        // idPreguntaCreada podría ser null.
+        if (mensaje != null && mensaje.toLowerCase().startsWith("error desde pl/sql")) {
+            // Podrías lanzar una excepción aquí o simplemente devolver el DTO con idPreguntaCreada como null
+            // throw new RuntimeException(mensaje);
+        }
+
+
+        return new CrearPreguntaResponseDTO(idPreguntaCreada, mensaje);
     }
 
     @Override
